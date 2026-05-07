@@ -3,14 +3,26 @@ services:
     image: quay.io/minio/minio
     container_name: minio-server
     ports:
-      - "9000:9000" # API 端口
-      - "9001:9001" # 控制台端口
+      - '9000:9000' # API 端口
+      - '9001:9001' # 控制台端口
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - ./data:/data # 文件映射地址
     command: server /data --console-address ":9001"
+    restart: always
+
+  pageindex-api:
+    build:
+      context: .
+      dockerfile: pageindex.Dockerfile
+    container_name: pageindex-api
+    ports:
+      - '9090:8000'
+    environment:
+      - OPENAI_API_BASE=https://api.deepseek.com/v1
+      - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
     restart: always
 
   # 自动创建 bucket 的可选工具容器

@@ -1,3 +1,4 @@
+import { sleep } from 'bun'
 import { Elysia, t } from 'elysia'
 import { errCodeEnum } from '../../define/errDefine'
 import { buildResponseBody, bulidSseResponse, createApiResponseType } from '../../utils/msgWrapper'
@@ -10,6 +11,7 @@ export const chatController = new Elysia()
   .post(
     '/echo',
     async ({ body }) => {
+      await sleep(100)
       return buildResponseBody(0, body)
     },
     {

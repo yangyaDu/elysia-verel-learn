@@ -10,7 +10,8 @@
     "tsc-check": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "env:sync": "bun run scripts/sync-env.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.75",

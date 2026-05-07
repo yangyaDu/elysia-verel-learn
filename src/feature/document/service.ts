@@ -1,6 +1,6 @@
 import { errCodeEnum, type ErrCodeT } from '../../define/errDefine'
-import { MINIO_BUCKET_NAME, getMinioClient } from '../../minioClient'
-import { getPageIndexClient } from '../../pageindexClient'
+import { MINIO_BUCKET_NAME, getMinioClient } from '../../utils/minioClient'
+import { getPageIndexClient } from '../../utils/pageindexClient'
 import type { CheckStatusResponse, DocumentMetadata, UploadDocumentResponse } from './model'
 
 export type CheckStatusResponseType = CheckStatusResponse | null

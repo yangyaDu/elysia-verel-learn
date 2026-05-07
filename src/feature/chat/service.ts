@@ -1,6 +1,6 @@
 import { generateText, streamText } from 'ai'
-import { getDeepSeekChatModel } from '../../deepseekClient'
 import { errCodeEnum, type ErrCodeT } from '../../define/errDefine'
+import { getDeepSeekChatModel } from '../../utils/deepseekClient'
 import type { ChatResult } from './model'
 
 export class ChatServiceError extends Error {
@@ -12,7 +12,8 @@ export class ChatServiceError extends Error {
   }
 }
 
-const DEFAULT_SYSTEM_PROMPT = 'You are a professional writer.You write simple, clear and concise content.'
+const DEFAULT_SYSTEM_PROMPT =
+  'You are a professional writer.You write simple, clear and concise content.'
 
 // 定义参数类
 export class ChatParams {

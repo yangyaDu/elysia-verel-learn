@@ -23,6 +23,8 @@ services:
     environment:
       - OPENAI_API_BASE=https://api.deepseek.com/v1
       - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      - ./pageindex_data:/app/output # 存放向量索引和解析结果
     restart: always
 
   # 自动创建 bucket 的可选工具容器

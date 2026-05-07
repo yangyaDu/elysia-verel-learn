@@ -1,9 +1,21 @@
+import { cors } from '@elysiajs/cors'
 import swagger from '@elysiajs/swagger'
 import { Elysia } from 'elysia'
 import { chatController } from './feature/chat/controller'
 import { documentController } from './feature/document/controller'
 
+const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
 const app = new Elysia()
+  .use(
+    cors({
+      origin: allowOrigins,
+      credentials: true,
+    })
+  )
   .use(chatController)
   .use(documentController)
 

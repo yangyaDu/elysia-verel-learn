@@ -7,20 +7,40 @@ const DEFAULT_MODEL = 'deepseek-chat'
  * 从环境变量读取 DeepSeek（OpenAI 兼容）配置。
  * Bun `dev:bun` 会自动加载 `.env`；`vercel dev` / 生产环境由平台注入变量。
  */
-export function getDeepSeekChatModel() {
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
-  if (!apiKey) {
-    return null
+type DeepSeekChatModel = ReturnType<typeof createOpenAI> extends infer Provider
+  ? Provider extends { chat: (modelId: string) => infer Model }
+    ? { model: Model; modelId: string }
+    : never
+  : never
+
+class DeepSeekClientSingleton {
+  private static instance: DeepSeekChatModel | null | undefined
+
+  static getInstance() {
+    if (DeepSeekClientSingleton.instance !== undefined) {
+      return DeepSeekClientSingleton.instance
+    }
+
+    const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
+    if (!apiKey) {
+      DeepSeekClientSingleton.instance = null
+      return DeepSeekClientSingleton.instance
+    }
+
+    const baseURL = (process.env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/$/, '')
+    const modelId = process.env.DEEPSEEK_MODEL?.trim() || DEFAULT_MODEL
+
+    const provider = createOpenAI({
+      apiKey,
+      baseURL,
+      name: 'deepseek',
+    })
+
+    DeepSeekClientSingleton.instance = { model: provider.chat(modelId), modelId }
+    return DeepSeekClientSingleton.instance
   }
+}
 
-  const baseURL = (process.env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/$/, '')
-  const modelId = process.env.DEEPSEEK_MODEL?.trim() || DEFAULT_MODEL
-
-  const provider = createOpenAI({
-    apiKey,
-    baseURL,
-    name: 'deepseek',
-  })
-
-  return { model: provider.chat(modelId), modelId }
+export function getDeepSeekChatModel() {
+  return DeepSeekClientSingleton.getInstance()
 }

@@ -1,8 +1,11 @@
 import swagger from '@elysiajs/swagger'
 import { Elysia } from 'elysia'
 import { chatController } from './feature/chat/controller'
+import { documentController } from './feature/document/controller'
 
-const app = new Elysia().use(chatController)
+const app = new Elysia()
+  .use(chatController)
+  .use(documentController)
 
 app.use(
   swagger({

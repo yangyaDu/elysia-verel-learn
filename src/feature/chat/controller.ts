@@ -3,7 +3,7 @@ import { Elysia, t } from 'elysia'
 import { errCodeEnum } from '../../define/errDefine'
 import { buildResponseBody, bulidSseResponse, createApiResponseType } from '../../utils/msgWrapper'
 import { chatBodySchema, chatDataSchema, echoBodySchema } from './model'
-import { ChatServiceError, deepSeekChatService } from './service'
+import { deepSeekChatService } from './service'
 
 const DEFAULT_CHAT_PROMPT = '用不超过两句话解释：什么是 REST API？'
 
@@ -29,16 +29,8 @@ export const chatController = new Elysia()
     async ({ body }) => {
       const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
 
-      try {
-        const result = await deepSeekChatService.chat(prompt)
-        return buildResponseBody(errCodeEnum.ERR_SUCCESS.code, result)
-      } catch (err) {
-        console.error('[chat]', err)
-        if (err instanceof ChatServiceError && err.kind === 'NOT_CONFIGURED') {
-          return buildResponseBody(errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null)
-        }
-        return buildResponseBody(errCodeEnum.ERR_THIRDPARTY_ERROR.code, null)
-      }
+      const [errCode, result] = await deepSeekChatService.chat(prompt)
+      return buildResponseBody(errCode, result)
     },
     {
       body: chatBodySchema,
@@ -52,23 +44,15 @@ export const chatController = new Elysia()
   )
   .post(
     '/chat/stream',
-    ({ body }) => {
+    async ({ body }) => {
       const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
 
-      try {
-        const streamIterable = deepSeekChatService.chatStream(prompt)
-        return bulidSseResponse(streamIterable)
-      } catch (err) {
-        console.error('[chat/stream]', err)
-        if (err instanceof ChatServiceError && err.kind === 'NOT_CONFIGURED') {
-          return Response.json(buildResponseBody(errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null), {
-            status: 500,
-          })
-        }
-        return Response.json(buildResponseBody(errCodeEnum.ERR_THIRDPARTY_ERROR.code, null), {
-          status: 502,
-        })
+      const [errCode, streamIterable] = await deepSeekChatService.chatStream(prompt)
+      if (errCode !== errCodeEnum.ERR_SUCCESS.code || !streamIterable) {
+        return Response.json(buildResponseBody(errCode, null))
       }
+
+      return bulidSseResponse(streamIterable)
     },
     {
       body: chatBodySchema,

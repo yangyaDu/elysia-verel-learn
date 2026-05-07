@@ -1,4 +1,5 @@
 import { generateText, streamText } from 'ai'
+import { errCodeEnum, type ErrCodeT } from '../../define/errDefine'
 import { getDeepSeekChatModel } from '../../deepseekClient'
 
 export type ChatUsage = {
@@ -13,22 +14,16 @@ export type ChatResult = {
   usage?: ChatUsage
 }
 
-export class ChatServiceError extends Error {
-  readonly kind: 'NOT_CONFIGURED' | 'THIRDPARTY'
-
-  constructor(kind: ChatServiceError['kind'], message?: string) {
-    super(message ?? kind)
-    this.kind = kind
-  }
-}
+export type ChatResponseType = ChatResult | null
+export type ChatStreamResponseType = AsyncIterable<string> | null
 
 const DEFAULT_SYSTEM_PROMPT = 'You are a professional writer.You write simple, clear and concise content.'
 
 export class DeepSeekChatService {
-  async chat(prompt: string): Promise<ChatResult> {
+  async chat(prompt: string): Promise<[ErrCodeT, ChatResponseType]> {
     const configured = getDeepSeekChatModel()
     if (!configured) {
-      throw new ChatServiceError('NOT_CONFIGURED')
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
     }
 
     const { model, modelId } = configured
@@ -49,20 +44,21 @@ export class DeepSeekChatService {
             }
           : undefined
 
-      return {
+      return [errCodeEnum.ERR_SUCCESS.code, {
         text: result.text,
         model: modelId,
         usage,
-      }
+      }]
     } catch (err) {
-      throw new ChatServiceError('THIRDPARTY', err instanceof Error ? err.message : undefined)
+      console.error('[chatService/chat]', err)
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
     }
   }
 
-  chatStream(prompt: string): AsyncIterable<string> {
+  chatStream(prompt: string): Promise<[ErrCodeT, ChatStreamResponseType]> {
     const configured = getDeepSeekChatModel()
     if (!configured) {
-      throw new ChatServiceError('NOT_CONFIGURED')
+      return Promise.resolve([errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null])
     }
 
     const { model } = configured
@@ -73,9 +69,10 @@ export class DeepSeekChatService {
         system: DEFAULT_SYSTEM_PROMPT,
         prompt,
       })
-      return generator.textStream
+      return Promise.resolve([errCodeEnum.ERR_SUCCESS.code, generator.textStream])
     } catch (err) {
-      throw new ChatServiceError('THIRDPARTY', err instanceof Error ? err.message : undefined)
+      console.error('[chatService/chatStream]', err)
+      return Promise.resolve([errCodeEnum.ERR_THIRDPARTY_ERROR.code, null])
     }
   }
 }

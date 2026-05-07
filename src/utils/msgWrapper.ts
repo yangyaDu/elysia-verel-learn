@@ -21,7 +21,7 @@ const toSseData = (text: string) =>
     .map((line) => `data: ${line}\n`)
     .join('') + '\n'
 
-export function createSseResponse(streamIterable: AsyncIterable<string>): Response {
+export function bulidSseResponse(streamIterable: AsyncIterable<string>): Response {
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream<Uint8Array>({

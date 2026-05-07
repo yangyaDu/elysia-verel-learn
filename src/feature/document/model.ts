@@ -7,7 +7,21 @@ export const uploadDocumentResponseSchema = t.Object({
   status: t.Optional(t.String({ description: '状态' })),
 })
 
+export const documentMetadataSchema = t.Object({
+  id: t.String(),
+  name: t.String(),
+  status: t.String(),
+  created_at: t.Optional(t.String()),
+  folder_id: t.Optional(t.String()),
+})
+
+export const listDocumentsResponseSchema = t.Object({
+  documents: t.Array(documentMetadataSchema),
+})
+
 export type UploadDocumentResponse = typeof uploadDocumentResponseSchema.static
+export type DocumentMetadata = typeof documentMetadataSchema.static
+export type ListDocumentsResponse = typeof listDocumentsResponseSchema.static
 
 const checkStatusResult = t.Object({
   title: t.String({ description: '标题' }),

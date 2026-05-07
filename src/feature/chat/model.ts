@@ -27,3 +27,19 @@ export const chatDataSchema = t.Object({
     })
   ),
 })
+
+export type ChatUsage = {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+}
+
+export type ChatResult = {
+  text: string
+  model: string
+  usage?: ChatUsage
+}
+
+export type EchoBody = typeof echoBodySchema.static
+export type ChatBody = typeof chatBodySchema.static
+export type ChatData = typeof chatDataSchema.static

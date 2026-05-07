@@ -1,4 +1,3 @@
-import { sleep } from 'bun'
 import { Elysia, t } from 'elysia'
 import { errCodeEnum } from '../../define/errDefine'
 import { buildResponseBody, bulidSseResponse, createApiResponseType } from '../../utils/msgWrapper'
@@ -11,7 +10,6 @@ export const chatController = new Elysia()
   .post(
     '/echo',
     async ({ body }) => {
-      await sleep(1000)
       return buildResponseBody(0, body)
     },
     {
@@ -28,9 +26,8 @@ export const chatController = new Elysia()
     '/chat',
     async ({ body }) => {
       const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
-
-      const [errCode, result] = await deepSeekChatService.chat(prompt)
-      return buildResponseBody(errCode, result)
+      const [code, data] = await deepSeekChatService.chat({ prompt })
+      return buildResponseBody(code, data)
     },
     {
       body: chatBodySchema,
@@ -44,15 +41,18 @@ export const chatController = new Elysia()
   )
   .post(
     '/chat/stream',
-    async ({ body }) => {
+    ({ body }) => {
       const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
 
-      const [errCode, streamIterable] = await deepSeekChatService.chatStream(prompt)
-      if (errCode !== errCodeEnum.ERR_SUCCESS.code || !streamIterable) {
-        return Response.json(buildResponseBody(errCode, null))
+      try {
+        const streamIterable = deepSeekChatService.chatStream({ prompt })
+        return bulidSseResponse(streamIterable)
+      } catch (err) {
+        console.error('[chat/stream]', err)
+        return Response.json(buildResponseBody(errCodeEnum.ERR_THIRDPARTY_ERROR.code, null), {
+          status: 502,
+        })
       }
-
-      return bulidSseResponse(streamIterable)
     },
     {
       body: chatBodySchema,

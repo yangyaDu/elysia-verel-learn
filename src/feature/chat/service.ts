@@ -1,26 +1,31 @@
 import { generateText, streamText } from 'ai'
-import { errCodeEnum, type ErrCodeT } from '../../define/errDefine'
 import { getDeepSeekChatModel } from '../../deepseekClient'
+import { errCodeEnum, type ErrCodeT } from '../../define/errDefine'
+import type { ChatResult } from './model'
 
-export type ChatUsage = {
-  inputTokens: number
-  outputTokens: number
-  totalTokens: number
+export class ChatServiceError extends Error {
+  readonly kind: 'NOT_CONFIGURED' | 'THIRDPARTY'
+
+  constructor(kind: ChatServiceError['kind'], message?: string) {
+    super(message ?? kind)
+    this.kind = kind
+  }
 }
-
-export type ChatResult = {
-  text: string
-  model: string
-  usage?: ChatUsage
-}
-
-export type ChatResponseType = ChatResult | null
-export type ChatStreamResponseType = AsyncIterable<string> | null
 
 const DEFAULT_SYSTEM_PROMPT = 'You are a professional writer.You write simple, clear and concise content.'
 
+// 定义参数类
+export class ChatParams {
+  prompt!: string
+}
+
+export class ChatStreamParams {
+  prompt!: string
+}
+
 export class DeepSeekChatService {
-  async chat(prompt: string): Promise<[ErrCodeT, ChatResponseType]> {
+  async chat(params: ChatParams): Promise<[ErrCodeT, ChatResult | null]> {
+    const { prompt } = params
     const configured = getDeepSeekChatModel()
     if (!configured) {
       return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
@@ -44,21 +49,25 @@ export class DeepSeekChatService {
             }
           : undefined
 
-      return [errCodeEnum.ERR_SUCCESS.code, {
-        text: result.text,
-        model: modelId,
-        usage,
-      }]
+      return [
+        errCodeEnum.ERR_SUCCESS.code,
+        {
+          text: result.text,
+          model: modelId,
+          usage,
+        },
+      ]
     } catch (err) {
-      console.error('[chatService/chat]', err)
+      console.error('[chat]', err)
       return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
     }
   }
 
-  chatStream(prompt: string): Promise<[ErrCodeT, ChatStreamResponseType]> {
+  chatStream(params: ChatStreamParams): AsyncIterable<string> {
+    const { prompt } = params
     const configured = getDeepSeekChatModel()
     if (!configured) {
-      return Promise.resolve([errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null])
+      throw new ChatServiceError('NOT_CONFIGURED')
     }
 
     const { model } = configured
@@ -69,13 +78,11 @@ export class DeepSeekChatService {
         system: DEFAULT_SYSTEM_PROMPT,
         prompt,
       })
-      return Promise.resolve([errCodeEnum.ERR_SUCCESS.code, generator.textStream])
+      return generator.textStream
     } catch (err) {
-      console.error('[chatService/chatStream]', err)
-      return Promise.resolve([errCodeEnum.ERR_THIRDPARTY_ERROR.code, null])
+      throw new ChatServiceError('THIRDPARTY', err instanceof Error ? err.message : undefined)
     }
   }
 }
 
 export const deepSeekChatService = new DeepSeekChatService()
-

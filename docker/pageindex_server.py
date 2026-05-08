@@ -1,5 +1,5 @@
-# Version: 1.0.2 - Fixed /docs conflict
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request
+# Version: 1.0.3 - Support Background Tasks for non-blocking upload
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request, BackgroundTasks
 import shutil
 import os
 import asyncio
@@ -45,43 +45,69 @@ def save_cache():
 async def startup_event():
     load_cache()
 
-@app.post("/doc/")
-async def submit_document(file: UploadFile = File(...)):
-    print(f"Uploading document: {file.filename}")
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    
-    file_path = os.path.join(UPLOAD_DIR, f"{os.urandom(8).hex()}-{file.filename}")
+async def process_document_task(file_path: str, doc_id: str, user_opt: dict):
+    """后台处理文档的任务"""
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        user_opt = {
-            "if_add_node_id": "yes",
-            "if_add_node_text": "yes",
-            "if_add_node_summary": "yes",
-            "if_add_doc_description": "yes",
-            "model": "openai/deepseek-chat"
-        }
-        
+        print(f"Background processing started for: {doc_id}")
         opt = ConfigLoader().load(user_opt)
+        
+        # 调用核心解析逻辑 (耗时操作)
         result = await asyncio.to_thread(page_index_main, file_path, opt)
         
-        doc_id = os.path.basename(file_path)
+        # 更新缓存为完成状态
         results_cache[doc_id] = {
             "doc_id": doc_id,
             "status": "completed",
             "result": result.get("structure", [])
         }
         save_cache()
-        
-        return {"doc_id": doc_id, "status": "completed"}
+        print(f"Background processing completed for: {doc_id}")
     except Exception as e:
-        print(f"Error processing: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Background processing failed for {doc_id}: {e}")
+        results_cache[doc_id] = {
+            "doc_id": doc_id,
+            "status": "error",
+            "error": str(e)
+        }
+        save_cache()
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
+
+@app.post("/doc/")
+async def submit_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    print(f"Received upload request: {file.filename}")
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    # 使用唯一的 doc_id
+    doc_id = f"{os.urandom(8).hex()}-{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, doc_id)
+    
+    # 先保存文件
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # 1. 立即设置状态为 processing
+    results_cache[doc_id] = {
+        "doc_id": doc_id,
+        "status": "processing",
+        "result": []
+    }
+    save_cache()
+
+    # 2. 将耗时解析任务放入后台
+    user_opt = {
+        "if_add_node_id": "yes",
+        "if_add_node_text": "yes",
+        "if_add_node_summary": "yes",
+        "if_add_doc_description": "yes",
+        "model": "openai/deepseek-chat"
+    }
+    background_tasks.add_task(process_document_task, file_path, doc_id, user_opt)
+    
+    # 3. 立即返回结果，不等待解析完成
+    return {"doc_id": doc_id, "status": "processing"}
 
 @app.get("/doc/{doc_id}/")
 async def get_tree(doc_id: str):
@@ -93,22 +119,22 @@ async def get_tree(doc_id: str):
 async def get_metadata(doc_id: str):
     if doc_id not in results_cache:
         raise HTTPException(status_code=404, detail="Document not found")
+    data = results_cache[doc_id]
     return {
         "id": doc_id,
         "name": doc_id.split('-', 1)[-1],
-        "status": "completed",
+        "status": data.get("status", "unknown"),
         "created_at": "2026-05-07T00:00:00Z"
     }
 
 @app.get("/docs")
 async def list_documents(limit: int = 50, offset: int = 0):
-    print(f"Listing docs: limit={limit}, offset={offset}")
     docs = []
-    for doc_id in results_cache:
+    for doc_id, data in results_cache.items():
         docs.append({
             "id": doc_id,
             "name": doc_id.split('-', 1)[-1],
-            "status": "completed"
+            "status": data.get("status", "unknown")
         })
     return docs[offset : offset + limit]
 
@@ -135,6 +161,7 @@ async def mcp_handler(request: Request):
             query = tool_args.get("query", "").lower()
             hits = []
             for doc_id, content in results_cache.items():
+                if content.get("status") != "completed": continue
                 for node in content.get("result", []):
                     if query in node.get("text", "").lower() or query in node.get("title", "").lower():
                         hits.append({

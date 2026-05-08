@@ -145,12 +145,12 @@ export class DocumentService {
         {
           doc_id: response.doc_id,
           status: response.status,
-          result: response.result?.map((item) => ({
+          result: response.result?.map((item: any) => ({
             title: item.title,
             node_id: item.node_id,
             start_index: item.start_index ?? 0,
             end_index: item.end_index ?? 0,
-            summary: item.summary,
+            summary: item.summary ?? '',
             text: item.text,
           })) as CheckStatusResponse['result'],
         },

@@ -3,6 +3,7 @@ import swagger from '@elysiajs/swagger'
 import { Elysia } from 'elysia'
 import { chatController } from './feature/chat/controller'
 import { documentController } from './feature/document/controller'
+import { errorMiddleware, loggerMiddleware } from './middlewares'
 
 const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:3030')
   .split(',')
@@ -10,6 +11,8 @@ const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:3030')
   .filter(Boolean)
 
 const app = new Elysia()
+  .use(loggerMiddleware)
+  .use(errorMiddleware)
   .use(
     cors({
       origin: allowOrigins,

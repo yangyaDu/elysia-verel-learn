@@ -21,7 +21,8 @@
     "@sinclair/typebox": "^0.34.41",
     "ai": "^6.0.175",
     "elysia": "^1.4.19",
-    "minio": "^8.0.7"
+    "minio": "^8.0.7",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",

@@ -26,16 +26,10 @@ export type ListDocumentsResponse = typeof listDocumentsResponseSchema.static
 const checkStatusResult = t.Object({
   title: t.String({ description: '标题' }),
   node_id: t.String({ description: '节点 ID' }),
-  page_index: t.Number({ description: '页面索引' }),
+  start_index: t.Number({ description: '开始索引' }),
+  end_index: t.Number({ description: '结束索引' }),
+  summary: t.String({ description: '摘要' }),
   text: t.String({ description: '文本' }),
-  nodes: t.Array(
-    t.Object({
-      title: t.String({ description: '标题' }),
-      node_id: t.String({ description: '节点 ID' }),
-      page_index: t.Number({ description: '页面索引' }),
-      text: t.String({ description: '文本' }),
-    })
-  ),
 })
 
 export const checkStatusResponseSchema = t.Object({

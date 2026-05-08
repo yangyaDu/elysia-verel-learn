@@ -9,6 +9,25 @@ import {
 import { documentService } from './service'
 
 export const documentController = new Elysia({ prefix: '/document' })
+  .get(
+    '/preview/:s3Key',
+    async ({ params: { s3Key } }) => {
+      const [code, data] = await documentService.getPreviewUrl({ s3Key })
+      return buildResponseBody(code, data)
+    },
+    {
+      params: t.Object({
+        s3Key: t.String(),
+      }),
+      response: {
+        200: createApiResponseType(t.String()),
+      },
+      detail: {
+        tags: ['document'],
+        summary: '获取 PDF 预览链接 (MinIO Presigned URL)',
+      },
+    }
+  )
   .post(
     '/upload',
     async ({ body: { file } }) => {

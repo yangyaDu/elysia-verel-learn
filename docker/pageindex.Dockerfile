@@ -17,10 +17,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制包装器脚本
 COPY pageindex_server.py /app/pageindex_server.py
 
-# 设置环境变量默认值（可以在 compose 中覆盖）
+# 设置 PYTHONPATH 确保能找到 pageindex 包
+ENV PYTHONPATH=/app
+
+# 设置环境变量默认值
 ENV OPENAI_API_BASE=https://api.deepseek.com/v1
 ENV DEEPSEEK_API_KEY=""
 
-EXPOSE 8000
+EXPOSE 9090
 
-CMD ["python", "pageindex_server.py"]
+# 使用 uvicorn 启动 FastAPI 应用
+CMD ["uvicorn", "pageindex_server:app", "--host", "0.0.0.0", "--port", "9090"]

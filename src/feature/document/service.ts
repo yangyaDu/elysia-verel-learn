@@ -28,7 +28,28 @@ export class CheckStatusParams {
   docId!: string
 }
 
+export class GetPreviewParams {
+  s3Key!: string
+}
+
 export class DocumentService {
+  async getPreviewUrl(params: GetPreviewParams): Promise<[ErrCodeT, string | null]> {
+    const { s3Key } = params
+    const minioClient = getMinioClient()
+    if (!minioClient) {
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
+    }
+
+    try {
+      // 生成一个 1 小时有效的临时预签名 URL
+      const url = await minioClient.presignedGetObject(MINIO_BUCKET_NAME, s3Key, 3600)
+      return [errCodeEnum.ERR_SUCCESS.code, url]
+    } catch (err) {
+      console.error('[documentService/getPreviewUrl]', err)
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
+    }
+  }
+
   async uploadPdf(params: UploadPdfParams): Promise<[ErrCodeT, UploadDocumentResponseType]> {
     const { file } = params
     const pageIndexClient = getPageIndexClient()
@@ -127,15 +148,11 @@ export class DocumentService {
           result: response.result?.map((item) => ({
             title: item.title,
             node_id: item.node_id,
-            page_index: item.page_index,
+            start_index: item.start_index ?? 0,
+            end_index: item.end_index ?? 0,
+            summary: item.summary,
             text: item.text,
-            nodes: (item.nodes ?? []).map((node) => ({
-              title: node.title,
-              node_id: node.node_id,
-              page_index: node.page_index,
-              text: node.text,
-            })),
-          })),
+          })) as CheckStatusResponse['result'],
         },
       ]
     } catch (err) {

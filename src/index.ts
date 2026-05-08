@@ -4,7 +4,7 @@ import { Elysia } from 'elysia'
 import { chatController } from './feature/chat/controller'
 import { documentController } from './feature/document/controller'
 
-const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:3000')
+const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:3030')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)

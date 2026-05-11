@@ -1,141 +1,91 @@
-import { generateText, streamText } from 'ai'
-import { errCodeEnum, type ErrCodeT } from '../../define/errDefine'
+import { generateText, stepCountIs, streamText } from 'ai'
+import { errCodeEnum, type ErrInfo } from '../../define/errDefine'
 import { documentTools } from '../../tools/documentTool'
 import { getDeepSeekChatModel } from '../../utils/deepseekClient'
-import type { ChatResult } from './model'
-
-export class ChatServiceError extends Error {
-  readonly kind: 'NOT_CONFIGURED' | 'THIRDPARTY'
-
-  constructor(kind: ChatServiceError['kind'], message?: string) {
-    super(message ?? kind)
-    this.kind = kind
-  }
-}
+import type { ChatSseChunk } from '../../utils/msgWrapper'
+import type { ChatBody, ChatResult, ChatToolCall, ChatToolError, ChatToolResult, ChatUsage } from './model'
 
 const DEFAULT_SYSTEM_PROMPT =
-  'You are a professional writer.You write simple, clear and concise content.' +
-  +' You can use tools to search and read documents to provide accurate information.'
+  'You are a professional writer. You write simple, clear and concise content. ' +
+  'You can use tools to search and read documents to provide accurate information.'
 
-// 定义参数类
-export class ChatParams {
-  prompt!: string
-}
+const DEFAULT_CHAT_PROMPT = '用不超过两句话解释：什么是 REST API？'
 
-export class ChatStreamParams {
-  prompt!: string
-}
-
-export class ChatWithToolsParams {
-  prompt!: string
+/** Minimal fields read from `generateText` for this endpoint. */
+type DeepSeekGenerateSnapshot = {
+  text: string
+  reasoningText?: string
+  toolCalls?: ChatToolCall[]
+  toolResults?: ChatToolResult[]
+  toolErrors?: ChatToolError[]
+  usage?: {
+    inputTokens?: number | null
+    outputTokens?: number | null
+    totalTokens?: number | null
+  }
 }
 
 export class DeepSeekChatService {
-  async chatWithTools(params: ChatWithToolsParams): Promise<[ErrCodeT, ChatResult | null]> {
-    const { prompt } = params
+  async chat(params: ChatBody): Promise<[ErrInfo, ChatResult | null]> {
+    const prompt = params.prompt ?? DEFAULT_CHAT_PROMPT
     const configured = getDeepSeekChatModel()
     if (!configured) {
-      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
 
     const { model, modelId } = configured
 
     try {
-      const result = await generateText({
+      const result = (await generateText({
         model,
         system: DEFAULT_SYSTEM_PROMPT,
         prompt,
         tools: documentTools,
-      })
+        stopWhen: stepCountIs(5),
+      })) as DeepSeekGenerateSnapshot
 
-      const usage =
-        result.usage !== undefined
-          ? {
-              inputTokens: result.usage.inputTokens ?? 0,
-              outputTokens: result.usage.outputTokens ?? 0,
-              totalTokens: result.usage.totalTokens ?? 0,
-            }
-          : undefined
+      const data: ChatResult = {
+        text: result.text,
+        model: modelId,
+      }
 
-      return [
-        errCodeEnum.ERR_SUCCESS.code,
-        {
-          text: result.text,
-          model: modelId,
-          usage,
-        },
-      ]
-    } catch (err) {
-      console.error('[chatWithTools]', err)
-      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
-    }
-  }
+      if (params.thinking === true && result.reasoningText && result.reasoningText.length > 0) {
+        data.thinking = result.reasoningText
+      }
 
-  async chat(params: ChatParams): Promise<[ErrCodeT, ChatResult | null]> {
-    const { prompt } = params
-    const configured = getDeepSeekChatModel()
-    if (!configured) {
-      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
-    }
+      if (result.toolCalls && result.toolCalls.length > 0) {
+        data.toolCalls = result.toolCalls.map(toChatToolCall)
+      }
 
-    const { model, modelId } = configured
+      if (result.toolResults && result.toolResults.length > 0) {
+        data.toolResults = result.toolResults.map(toChatToolResult)
+      }
 
-    try {
-      const result = await generateText({
-        model,
-        system: DEFAULT_SYSTEM_PROMPT,
-        prompt,
-      })
+      if (result.toolErrors && result.toolErrors.length > 0) {
+        data.toolErrors = result.toolErrors.map(toChatToolError)
+      }
 
-      const usage =
-        result.usage !== undefined
-          ? {
-              inputTokens: result.usage.inputTokens ?? 0,
-              outputTokens: result.usage.outputTokens ?? 0,
-              totalTokens: result.usage.totalTokens ?? 0,
-            }
-          : undefined
+      if (result.usage) {
+        const usage: ChatUsage = {
+          inputTokens: result.usage.inputTokens ?? 0,
+          outputTokens: result.usage.outputTokens ?? 0,
+          totalTokens: result.usage.totalTokens ?? 0,
+        }
+        data.usage = usage
+      }
 
-      return [
-        errCodeEnum.ERR_SUCCESS.code,
-        {
-          text: result.text,
-          model: modelId,
-          usage,
-        },
-      ]
+      return [errCodeEnum.ERR_SUCCESS, data]
     } catch (err) {
       console.error('[chat]', err)
-      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
     }
   }
 
-  chatStream(params: ChatStreamParams): AsyncIterable<string> {
-    const { prompt } = params
+  async *chatStream(params: ChatBody): AsyncGenerator<ChatSseChunk, void, unknown> {
+    const prompt = params.prompt ?? DEFAULT_CHAT_PROMPT
     const configured = getDeepSeekChatModel()
     if (!configured) {
-      throw new ChatServiceError('NOT_CONFIGURED')
-    }
-
-    const { model } = configured
-
-    try {
-      const generator = streamText({
-        model,
-        system: DEFAULT_SYSTEM_PROMPT,
-        prompt,
-      })
-      return generator.textStream
-    } catch (err) {
-      throw new ChatServiceError('THIRDPARTY', err instanceof Error ? err.message : undefined)
-    }
-  }
-
-  chatStreamWithTools(params: ChatWithToolsParams): AsyncIterable<string> {
-    const { prompt } = params
-    const configured = getDeepSeekChatModel()
-    if (!configured) {
-      throw new ChatServiceError('NOT_CONFIGURED')
+      return
     }
 
     const { model } = configured
@@ -146,13 +96,41 @@ export class DeepSeekChatService {
         system: DEFAULT_SYSTEM_PROMPT,
         prompt,
         tools: documentTools,
+        stopWhen: stepCountIs(5),
       })
-      return generator.textStream
+      for await (const part of generator.fullStream) {
+        if (params.thinking === true && part.type === 'reasoning-delta') {
+          yield { part: 'thinking', delta: part.text }
+        } else if (part.type === 'text-delta') {
+          yield { part: 'answer', delta: part.text }
+        } else if (part.type === 'tool-call') {
+          yield { part: 'tool-call', data: toChatToolCall(part) }
+        } else if (part.type === 'tool-result') {
+          yield { part: 'tool-result', data: toChatToolResult(part) }
+        } else if (part.type === 'tool-error') {
+          yield { part: 'tool-error', data: toChatToolError(part) }
+        }
+      }
     } catch (err) {
-      console.error('[chatStreamWithTools]', err)
-      throw new ChatServiceError('THIRDPARTY', err instanceof Error ? err.message : undefined)
+      console.error('[chatStream]', err)
     }
   }
 }
+
+const toChatToolCall = (toolCall: ChatToolCall): ChatToolCall => ({
+  toolCallId: toolCall.toolCallId,
+  toolName: toolCall.toolName,
+  input: toolCall.input,
+})
+
+const toChatToolResult = (toolResult: ChatToolResult): ChatToolResult => ({
+  ...toChatToolCall(toolResult),
+  output: toolResult.output,
+})
+
+const toChatToolError = (toolError: ChatToolError): ChatToolError => ({
+  ...toChatToolCall(toolError),
+  error: toolError.error,
+})
 
 export const deepSeekChatService = new DeepSeekChatService()

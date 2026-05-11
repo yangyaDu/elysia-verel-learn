@@ -1,18 +1,14 @@
-import { sleep } from 'bun'
 import { Elysia, t } from 'elysia'
 import { errCodeEnum } from '../../define/errDefine'
 import { buildResponseBody, bulidSseResponse, createApiResponseType } from '../../utils/msgWrapper'
 import { chatBodySchema, chatDataSchema, echoBodySchema } from './model'
 import { deepSeekChatService } from './service'
 
-const DEFAULT_CHAT_PROMPT = '用不超过两句话解释：什么是 REST API？'
-
 export const chatController = new Elysia()
   .post(
     '/echo',
-    async ({ body }) => {
-      await sleep(100)
-      return buildResponseBody(0, body)
+    ({ body }) => {
+      return buildResponseBody(errCodeEnum.ERR_SUCCESS, body)
     },
     {
       body: echoBodySchema,
@@ -27,9 +23,8 @@ export const chatController = new Elysia()
   .post(
     '/chat',
     async ({ body }) => {
-      const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
-      const [code, data] = await deepSeekChatService.chat({ prompt })
-      return buildResponseBody(code, data)
+      const [err, data] = await deepSeekChatService.chat(body)
+      return buildResponseBody(err, data)
     },
     {
       body: chatBodySchema,
@@ -38,41 +33,16 @@ export const chatController = new Elysia()
       },
       detail: {
         tags: ['chat'],
-      },
-    }
-  )
-  .post(
-    '/chat/tools',
-    async ({ body }) => {
-      const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
-      const [code, data] = await deepSeekChatService.chatWithTools({ prompt })
-      return buildResponseBody(code, data)
-    },
-    {
-      body: chatBodySchema,
-      response: {
-        200: createApiResponseType(chatDataSchema),
-      },
-      detail: {
-        tags: ['chat'],
-        summary: '带工具调用的 RAG 对话 (PageIndex)',
+        description:
+          '可选 `thinking: true` 启用深度思考（需模型与上游 API 支持）；成功时可能在 `data.thinking` 中返回推理过程文本。',
       },
     }
   )
   .post(
     '/chat/stream',
     ({ body }) => {
-      const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
-
-      try {
-        const streamIterable = deepSeekChatService.chatStream({ prompt })
-        return bulidSseResponse(streamIterable)
-      } catch (err) {
-        console.error('[chat/stream]', err)
-        return Response.json(buildResponseBody(errCodeEnum.ERR_THIRDPARTY_ERROR.code, null), {
-          status: 502,
-        })
-      }
+      const streamIterable = deepSeekChatService.chatStream(body)
+      return bulidSseResponse(streamIterable)
     },
     {
       body: chatBodySchema,
@@ -81,32 +51,8 @@ export const chatController = new Elysia()
       },
       detail: {
         tags: ['chat'],
-      },
-    }
-  )
-  .post(
-    '/chat/stream/tools',
-    async ({ body }) => {
-      const prompt = body.prompt ?? DEFAULT_CHAT_PROMPT
-
-      try {
-        const streamIterable = await deepSeekChatService.chatStreamWithTools({ prompt })
-        return bulidSseResponse(streamIterable)
-      } catch (err) {
-        console.error('[chat/stream/tools]', err)
-        return Response.json(buildResponseBody(errCodeEnum.ERR_THIRDPARTY_ERROR.code, null), {
-          status: 502,
-        })
-      }
-    },
-    {
-      body: chatBodySchema,
-      response: {
-        200: t.String(),
-      },
-      detail: {
-        tags: ['chat'],
-        summary: '带工具调用的流式 RAG 对话 (PageIndex)',
+        description:
+          '默认仅 `data:` 正文流；`thinking: true` 时并行发送 `event: thinking` 承载推理增量，结束仍为 `event: done`。',
       },
     }
   )

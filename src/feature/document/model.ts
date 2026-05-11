@@ -1,11 +1,67 @@
 import { t } from 'elysia'
 
+// --- Request Schemas & Classes ---
+
+export const getPreviewParamsSchema = t.Object({
+  s3Key: t.String(),
+})
+
+export class GetPreviewParams {
+  s3Key!: string
+}
+
+export const uploadBodySchema = t.Object({
+  file: t.File({
+    type: 'application/pdf',
+    maxSize: '20m',
+  }),
+})
+
+export class UploadPdfParams {
+  file!: File
+}
+
+export const listQuerySchema = t.Object({
+  limit: t.Optional(t.String()),
+  offset: t.Optional(t.String()),
+})
+
+export class ListDocumentsParams {
+  limit?: string | number
+  offset?: string | number
+}
+
+export const docParamsSchema = t.Object({
+  docId: t.String(),
+})
+
+export class DocParams {
+  docId!: string
+}
+
+// --- Response Schemas & Classes ---
+
+export type UploadDocumentResponse = {
+  doc_id: string
+  s3_key: string
+  url?: string
+  status?: string
+} | null
+
 export const uploadDocumentResponseSchema = t.Object({
   doc_id: t.String({ description: 'PageIndex 文档 ID' }),
   s3_key: t.String({ description: 'MinIO 中的对象键' }),
   url: t.Optional(t.String({ description: '文件的访问或下载 URL' })),
   status: t.Optional(t.String({ description: '状态' })),
 })
+
+export class DocumentMetadata {
+  id!: string
+  name!: string
+  status!: string
+  created_at?: string
+  folder_id?: string
+}
 
 export const documentMetadataSchema = t.Object({
   id: t.String(),
@@ -15,15 +71,30 @@ export const documentMetadataSchema = t.Object({
   folder_id: t.Optional(t.String()),
 })
 
+export class ListDocumentsResponse {
+  documents!: DocumentMetadata[]
+}
+
 export const listDocumentsResponseSchema = t.Object({
   documents: t.Array(documentMetadataSchema),
 })
 
-export type UploadDocumentResponse = typeof uploadDocumentResponseSchema.static
-export type DocumentMetadata = typeof documentMetadataSchema.static
-export type ListDocumentsResponse = typeof listDocumentsResponseSchema.static
+export class CheckStatusResult {
+  title!: string
+  node_id!: string
+  start_index!: number
+  end_index!: number
+  summary!: string
+  text!: string
+}
 
-const checkStatusResult = t.Object({
+export class CheckStatusResponse {
+  doc_id!: string
+  status!: string
+  result?: CheckStatusResult[]
+}
+
+const checkStatusResultSchema = t.Object({
   title: t.String({ description: '标题' }),
   node_id: t.String({ description: '节点 ID' }),
   start_index: t.Number({ description: '开始索引' }),
@@ -35,7 +106,5 @@ const checkStatusResult = t.Object({
 export const checkStatusResponseSchema = t.Object({
   doc_id: t.String({ description: 'PageIndex 文档 ID' }),
   status: t.String({ description: '状态' }),
-  result: t.Optional(t.Array(checkStatusResult)),
+  result: t.Optional(t.Array(checkStatusResultSchema)),
 })
-
-export type CheckStatusResponse = typeof checkStatusResponseSchema.static

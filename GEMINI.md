@@ -23,25 +23,41 @@ export type LoginRequest = typeof loginRequestSchema.static
 
 ## Service Pattern
 
-- Controllers should handle routing and request/response wrapping.
-- Business logic should reside in Services.
-- **Method Parameters**: Use class types (Parameter Objects) for service method inputs to simplify parameter passing and improve extensibility.
-- **Return Type**: Services should return standard error codes (defined in `src/define/errDefine.ts`) and data as a tuple: `Promise<[ErrCodeT, Data | null]>`.
+- Controllers should handle routing and simple parameter extraction/validation.
+- Business logic (including default values) should reside in Services.
+- **Method Parameters**: Use class types (Parameter Objects) for service method inputs.
+- **Return Type**: Services should return an `ErrInfo` object (containing code and message) and data as a tuple: `Promise<[ErrInfo, Data | null]>`.
 
 ### Service Example
 
 ```typescript
 // src/feature/example/service.ts
+import { errCodeEnum, type ErrInfo } from '../../define/errDefine'
+
 export class LoginParams {
   username!: string
   password!: string
 }
 
 export class ExampleService {
-  async login(params: LoginParams): Promise<[ErrCodeT, LoginResponse | null]> {
+  async login(params: LoginParams): Promise<[ErrInfo, LoginResponse | null]> {
     // ...
+    return [errCodeEnum.ERR_SUCCESS, { token: '...' }]
   }
 }
+```
+
+### Controller Example
+
+```typescript
+// src/feature/example/controller.ts
+  .post('/login', async ({ body }) => {
+    const [err, data] = await exampleService.login(body)
+    if (err.code !== errCodeEnum.ERR_SUCCESS.code) {
+      throw new BusinessError(err)
+    }
+    return buildResponseBody(err, data)
+  })
 ```
 
 ## Infrastructure

@@ -138,5 +138,20 @@ function getErrInfoFromCode(code: ErrCodeT): { readonly code: number; readonly m
   return errCodeEnum.ERR_CODE_INVALID
 }
 
-export { errCodeEnum, getErrInfoFromCode, getErrInfoFromKey };
+export interface ErrInfo {
+  readonly code: number
+  readonly message: string
+}
+
+export class BusinessError extends Error {
+  readonly errInfo: ErrInfo
+
+  constructor(err: ErrInfo, customMessage?: string) {
+    super(customMessage ?? err.message)
+    this.errInfo = err
+    this.name = 'BusinessError'
+  }
+}
+
+export { errCodeEnum, getErrInfoFromCode, getErrInfoFromKey }
 

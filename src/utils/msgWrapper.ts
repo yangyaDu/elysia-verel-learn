@@ -37,43 +37,79 @@ const toSseEventData = (eventName: string, text: string) => {
 const toSseJsonEventData = (eventName: string, data: unknown) =>
   toSseEventData(eventName, JSON.stringify(data))
 
-/** SSE 条目：`string` 与原来一致；结构化事件用于分轨返回 thinking / tool 数据。 */
+/**
+ * SSE 条目。每种 part 对应一种命名 SSE 事件（除 answer 用默认 data: 事件）：
+ *
+ * | part        | event name  | 含义                                               |
+ * |-------------|-------------|---------------------------------------------------|
+ * | answer      | *(default)* | 最终回答的增量文字（流式）                          |
+ * | thinking    | thinking    | 模型推理过程增量（thinking 模式）                   |
+ * | step-text   | step-text   | 中间步骤的说明文字（工具调用前的铺垫，可由前端隐藏）  |
+ * | tool-call   | tool-call   | LLM 调用工具的请求                                 |
+ * | tool-result | tool-result | 工具执行结果                                       |
+ * | tool-error  | tool-error  | 工具执行失败                                       |
+ * | sources     | sources     | 本次对话读取过的文档来源汇总（流结束前一次性发出）    |
+ */
 export type ChatSseChunk =
   | string
-  | { part: 'thinking' | 'answer'; delta: string }
+  | { part: 'thinking' | 'answer' | 'step-text'; delta: string }
   | { part: 'tool-call' | 'tool-result' | 'tool-error'; data: unknown }
+  | { part: 'sources'; data: unknown[] }
 
 export function bulidSseResponse(
   streamIterable: AsyncIterable<ChatSseChunk>
 ): Response {
   const encoder = new TextEncoder()
+  let closed = false
+  const enqueue = (controller: ReadableStreamDefaultController<Uint8Array>, text: string) => {
+    if (!closed) {
+      controller.enqueue(encoder.encode(text))
+    }
+  }
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for await (const chunk of streamIterable) {
+          if (closed) {
+            break
+          }
+
           if (typeof chunk === 'string') {
-            controller.enqueue(encoder.encode(toSseData(chunk)))
+            enqueue(controller, toSseData(chunk))
           } else if (chunk.part === 'thinking') {
-            controller.enqueue(encoder.encode(toSseEventData('thinking', chunk.delta)))
+            enqueue(controller, toSseEventData('thinking', chunk.delta))
+          } else if (chunk.part === 'step-text') {
+            enqueue(controller, toSseEventData('step-text', chunk.delta))
           } else if (
             chunk.part === 'tool-call' ||
             chunk.part === 'tool-result' ||
             chunk.part === 'tool-error'
           ) {
-            controller.enqueue(encoder.encode(toSseJsonEventData(chunk.part, chunk.data)))
+            enqueue(controller, toSseJsonEventData(chunk.part, chunk.data))
+          } else if (chunk.part === 'sources') {
+            enqueue(controller, toSseJsonEventData('sources', chunk.data))
           } else if (chunk.part === 'answer') {
-            controller.enqueue(encoder.encode(toSseData(chunk.delta)))
+            enqueue(controller, toSseData(chunk.delta))
           }
         }
-        controller.enqueue(encoder.encode('event: done\ndata: [DONE]\n\n'))
-        controller.close()
+        if (!closed) {
+          enqueue(controller, 'event: done\ndata: [DONE]\n\n')
+          closed = true
+          controller.close()
+        }
       } catch (streamErr) {
         console.error('[sseWrapper:stream]', streamErr)
-        controller.error(
-          streamErr instanceof Error ? streamErr : new Error(String(streamErr))
-        )
+        if (!closed) {
+          closed = true
+          controller.error(
+            streamErr instanceof Error ? streamErr : new Error(String(streamErr))
+          )
+        }
       }
+    },
+    cancel() {
+      closed = true
     },
   })
 

@@ -55,13 +55,13 @@ export const uploadDocumentResponseSchema = t.Object({
   status: t.Optional(t.String({ description: '状态' })),
 })
 
-export class DocumentMetadata {
-  id!: string
-  name!: string
-  status!: string
+export type DocumentMetadata = {
+  id: string
+  name: string
+  status: string
   created_at?: string
   folder_id?: string
-}
+} | null
 
 export const documentMetadataSchema = t.Object({
   id: t.String(),
@@ -70,10 +70,6 @@ export const documentMetadataSchema = t.Object({
   created_at: t.Optional(t.String()),
   folder_id: t.Optional(t.String()),
 })
-
-export class ListDocumentsResponse {
-  documents!: DocumentMetadata[]
-}
 
 export const listDocumentsResponseSchema = t.Object({
   documents: t.Array(documentMetadataSchema),

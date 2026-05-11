@@ -50,7 +50,10 @@ export const documentController = new Elysia({ prefix: '/document' })
   .get(
     '/list',
     async ({ query }) => {
-      const [err, data] = await documentService.listDocuments(query)
+      const [err, data] = await documentService.listDocuments({
+        limit: query.limit,
+        offset: query.offset,
+      })
       return buildResponseBody(err, data ? { documents: data } : null)
     },
     {

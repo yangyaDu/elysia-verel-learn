@@ -13,6 +13,15 @@ export class EchoBody {
   name!: string
 }
 
+export const chatMessageSchema = t.Object({
+  role: t.Union([t.Literal('system'), t.Literal('user'), t.Literal('assistant'), t.Literal('tool')]),
+  content: t.String(),
+  name: t.Optional(t.String()),
+  toolCallId: t.Optional(t.String()),
+})
+
+export type ChatMessage = typeof chatMessageSchema.static
+
 export const chatBodySchema = t.Object({
   prompt: t.Optional(
     t.String({
@@ -20,13 +29,27 @@ export const chatBodySchema = t.Object({
       maxLength: 16000,
     })
   ),
+  messages: t.Optional(t.Array(chatMessageSchema)),
   /** 为 true 时在支持「思考/推理」展示的模型上启用（如 DeepSeek thinking 模式）；不支持的模型请忽略或勿传。 */
   thinking: t.Optional(t.Boolean()),
+  /**
+   * 用户已选定的文档名称列表（PageIndex 文档名）。
+   * 传入后 LLM 将直接针对这些文档作答，无需先搜索。
+   */
+  docNames: t.Optional(t.Array(t.String({ minLength: 1 }))),
+  /** 调试用：是否输出工具调用/结果/错误事件。默认 false，避免前端把工具 JSON 拼进正文。 */
+  includeToolEvents: t.Optional(t.Boolean()),
+  /** 调试用：是否输出工具调用前的中间说明文字。默认 false。 */
+  includeStepText: t.Optional(t.Boolean()),
 })
 
 export class ChatBody {
   prompt?: string
+  messages?: ChatMessage[]
   thinking?: boolean
+  docNames?: string[]
+  includeToolEvents?: boolean
+  includeStepText?: boolean
 }
 
 // --- Response Schemas & Classes ---
@@ -49,6 +72,16 @@ export type ChatToolResult = ChatToolCall & {
 
 export type ChatToolError = ChatToolCall & {
   error: unknown
+}
+
+/** 一条文档来源引用，由 stream 结束前的 `sources` 事件携带。 */
+export type DocSource = {
+  /** PageIndex 文档名称 */
+  docName: string
+  /** PageIndex 文档 ID（findRelevantDocuments / getDocument 工具可提供） */
+  docId?: string
+  /** 实际读取的页面范围，如 "3,5-7"（getPageContent 工具可提供） */
+  pages?: string
 }
 
 export type ChatResult = {

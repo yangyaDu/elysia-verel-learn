@@ -83,12 +83,13 @@ export class DocumentService {
 
     try {
       const response = await client.api.getDocument(docId)
-      const data = new DocumentMetadata()
-      data.id = response.id
-      data.name = response.name
-      data.status = response.status
-      data.created_at = response.createdAt
-      data.folder_id = response.folderId ?? undefined
+      const data: DocumentMetadata = {
+        id: response.id,
+        name: response.name,
+        status: response.status ?? '',
+        created_at: response.createdAt ?? undefined,
+        folder_id: response.folderId ?? undefined,
+      }
 
       return [errCodeEnum.ERR_SUCCESS, data]
     } catch (err) {
@@ -107,14 +108,23 @@ export class DocumentService {
     }
 
     try {
-      const response = await client.api.listDocuments({ limit: limitNum, offset: offsetNum })
-      const data = response.documents.map((item) => {
-        const doc = new DocumentMetadata()
-        doc.id = item.id
-        doc.name = item.name
-        doc.status = item.status
-        doc.created_at = item.createdAt
-        doc.folder_id = item.folderId ?? undefined
+      // SDK 类型定义为 { documents: DocumentItem[] }，但实际 API 直接返回数组
+      const response = (await client.api.listDocuments({
+        limit: limitNum,
+        offset: offsetNum,
+      })) as unknown as import('@pageindex/sdk').DocumentItem[]
+      if (!response) {
+        return [errCodeEnum.ERR_NOT_FOUND, null]
+      }
+
+      const data = response.map((item) => {
+        const doc: DocumentMetadata = {
+          id: item.id,
+          name: item.name,
+          status: item.status ?? '',
+          created_at: item.createdAt ?? undefined,
+          folder_id: item.folderId ?? undefined,
+        }
         return doc
       })
       return [errCodeEnum.ERR_SUCCESS, data]

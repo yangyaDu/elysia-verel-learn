@@ -1,15 +1,56 @@
-import { generateText, stepCountIs, streamText } from 'ai'
+import { generateText, stepCountIs, streamText, type ModelMessage } from 'ai'
 import { errCodeEnum, type ErrInfo } from '../../define/errDefine'
-import { documentTools } from '../../tools/documentTool'
+import { ragTools } from '../../tools/documentTool'
 import { getDeepSeekChatModel } from '../../utils/deepseekClient'
 import type { ChatSseChunk } from '../../utils/msgWrapper'
-import type { ChatBody, ChatResult, ChatToolCall, ChatToolError, ChatToolResult, ChatUsage } from './model'
+import type {
+  ChatBody,
+  ChatResult,
+  ChatToolCall,
+  ChatToolError,
+  ChatToolResult,
+  ChatUsage,
+} from './model'
 
-const DEFAULT_SYSTEM_PROMPT =
+type DocSource = { docName: string; docId?: string; pages?: string }
+
+const BASE_SYSTEM_PROMPT =
   'You are a professional writer. You write simple, clear and concise content. ' +
   'You can use tools to search and read documents to provide accurate information.'
 
-const DEFAULT_CHAT_PROMPT = '用不超过两句话解释：什么是 REST API？'
+/**
+ * 动态构建 system prompt。
+ * 若用户已选定文档，明确告知 LLM 文档名称，避免它先盲目搜索。
+ */
+const buildSystemPrompt = (docNames?: string[]): string => {
+  if (!docNames || docNames.length === 0) {
+    return BASE_SYSTEM_PROMPT
+  }
+
+  const list = docNames.map((n) => `- ${n}`).join('\n')
+  return (
+    BASE_SYSTEM_PROMPT +
+    `\n\nThe user has pre-selected the following document(s) for this conversation:\n${list}\n` +
+    'You MUST answer based on these documents. Use getDocumentStructure or getPageContent with the ' +
+    'exact document name(s) listed above. Do NOT call findRelevantDocuments unless the user ' +
+    'explicitly asks to search for other documents.'
+  )
+}
+
+/** 辅助方法：将 ChatMessage 转换为 AI SDK 所需的 ModelMessage */
+function toModelMessages(params: ChatBody): ModelMessage[] {
+  if (params.messages && params.messages.length > 0) {
+    return params.messages.map((message) => {
+      if (message.role === 'system' || message.role === 'user' || message.role === 'assistant') {
+        return { role: message.role, content: message.content }
+      }
+
+      // Tool messages from clients are folded back as user-visible context.
+      return { role: 'user', content: message.content }
+    })
+  }
+  return [{ role: 'user', content: params.prompt ?? DEFAULT_CHAT_PROMPT }]
+}
 
 /** Minimal fields read from `generateText` for this endpoint. */
 type DeepSeekGenerateSnapshot = {
@@ -25,9 +66,61 @@ type DeepSeekGenerateSnapshot = {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Source extraction helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * 从工具调用结果中提取文档来源引用，按 docName 去重合并到 map 中。
+ * 支持 findRelevantDocuments / getPageContent / getDocument / getDocumentStructure。
+ */
+function extractSources(toolName: string, output: unknown, map: Map<string, DocSource>): void {
+  if (!output || typeof output !== 'object') { return }
+  const o = output as Record<string, unknown>
+
+  if (toolName === 'findRelevantDocuments') {
+    const docs = (o.docs ?? []) as Array<{ id?: string; name?: string }>
+    for (const doc of docs) {
+      if (doc.name && !map.has(doc.name)) {
+        map.set(doc.name, { docName: doc.name, docId: doc.id })
+      }
+    }
+  } else if (toolName === 'getPageContent') {
+    const docName = typeof o.doc_name === 'string' ? o.doc_name : undefined
+    const pages = typeof o.requested_pages === 'string' ? o.requested_pages : undefined
+    if (docName) {
+      const existing = map.get(docName)
+      if (existing) {
+        if (pages && !existing.pages) { existing.pages = pages }
+      } else {
+        map.set(docName, { docName, pages })
+      }
+    }
+  } else if (toolName === 'getDocument') {
+    const name = typeof o.name === 'string' ? o.name : undefined
+    const id = typeof o.id === 'string' ? o.id : undefined
+    if (name) {
+      const existing = map.get(name)
+      if (existing) {
+        if (!existing.docId) { existing.docId = id }
+      } else {
+        map.set(name, { docName: name, docId: id })
+      }
+    }
+  } else if (toolName === 'getDocumentStructure') {
+    const docName = typeof o.doc_name === 'string' ? o.doc_name : undefined
+    if (docName && !map.has(docName)) {
+      map.set(docName, { docName })
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
 export class DeepSeekChatService {
   async chat(params: ChatBody): Promise<[ErrInfo, ChatResult | null]> {
-    const prompt = params.prompt ?? DEFAULT_CHAT_PROMPT
     const configured = getDeepSeekChatModel()
     if (!configured) {
       return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
@@ -38,9 +131,9 @@ export class DeepSeekChatService {
     try {
       const result = (await generateText({
         model,
-        system: DEFAULT_SYSTEM_PROMPT,
-        prompt,
-        tools: documentTools,
+        system: buildSystemPrompt(params.docNames),
+        messages: toModelMessages(params),
+        tools: ragTools,
         stopWhen: stepCountIs(5),
       })) as DeepSeekGenerateSnapshot
 
@@ -82,40 +175,88 @@ export class DeepSeekChatService {
   }
 
   async *chatStream(params: ChatBody): AsyncGenerator<ChatSseChunk, void, unknown> {
-    const prompt = params.prompt ?? DEFAULT_CHAT_PROMPT
     const configured = getDeepSeekChatModel()
     if (!configured) {
       return
     }
 
     const { model } = configured
+    const sourcesMap = new Map<string, DocSource>()
 
     try {
       const generator = streamText({
         model,
-        system: DEFAULT_SYSTEM_PROMPT,
-        prompt,
-        tools: documentTools,
+        system: buildSystemPrompt(params.docNames),
+        messages: toModelMessages(params),
+        tools: ragTools,
         stopWhen: stepCountIs(5),
       })
+
+      /**
+       * Buffer chunks for the current step.
+       * We only decide whether the text in a step is "answer" or "step-text" once we
+       * see step-finish (finishReason tells us if tools were called next or not).
+       */
+      let stepBuffer: ChatSseChunk[] = []
+
       for await (const part of generator.fullStream) {
-        if (params.thinking === true && part.type === 'reasoning-delta') {
-          yield { part: 'thinking', delta: part.text }
+        if (part.type === 'start-step') {
+          stepBuffer = []
+        } else if (part.type === 'finish-step') {
+          const fr = part.finishReason ?? 'stop'
+          const isIntermediate = fr === 'tool-calls'
+
+          for (const chunk of stepBuffer) {
+            if (typeof chunk !== 'string' && chunk.part === 'answer') {
+              if (isIntermediate) {
+                if (params.includeStepText === true) {
+                  yield { part: 'step-text', delta: chunk.delta }
+                }
+              } else {
+                yield chunk
+              }
+            } else {
+              yield chunk
+            }
+          }
+          stepBuffer = []
+        } else if (params.thinking === true && part.type === 'reasoning-delta') {
+          stepBuffer.push({ part: 'thinking', delta: (part as { type: 'reasoning-delta'; text: string }).text })
         } else if (part.type === 'text-delta') {
-          yield { part: 'answer', delta: part.text }
+          stepBuffer.push({ part: 'answer', delta: part.text })
         } else if (part.type === 'tool-call') {
-          yield { part: 'tool-call', data: toChatToolCall(part) }
+          if (params.includeToolEvents === true) {
+            stepBuffer.push({ part: 'tool-call', data: toChatToolCall(part) })
+          }
         } else if (part.type === 'tool-result') {
-          yield { part: 'tool-result', data: toChatToolResult(part) }
+          const p = part as unknown as { toolName: string; output: unknown; toolCallId: string; input: unknown }
+          extractSources(p.toolName, p.output, sourcesMap)
+          if (params.includeToolEvents === true) {
+            stepBuffer.push({ part: 'tool-result', data: toChatToolResult(part) })
+          }
         } else if (part.type === 'tool-error') {
-          yield { part: 'tool-error', data: toChatToolError(part) }
+          if (params.includeToolEvents === true) {
+            stepBuffer.push({ part: 'tool-error', data: toChatToolError(part) })
+          }
         }
+      }
+
+      // Flush any remaining buffer (guard for streams that don't emit step-finish)
+      for (const chunk of stepBuffer) {
+        yield chunk
+      }
+
+      // Emit aggregated document sources once, right before the done event
+      if (sourcesMap.size > 0) {
+        yield { part: 'sources', data: [...sourcesMap.values()] }
       }
     } catch (err) {
       console.error('[chatStream]', err)
     }
   }
 }
+
+const DEFAULT_CHAT_PROMPT = '用不超过两句话解释：什么是 REST API？'
 
 const toChatToolCall = (toolCall: ChatToolCall): ChatToolCall => ({
   toolCallId: toolCall.toolCallId,

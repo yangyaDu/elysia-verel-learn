@@ -1,6 +1,6 @@
+import type { DocumentItem, TreeNode } from '@pageindex/sdk'
 import { tool } from 'ai'
 import { z } from 'zod'
-import type { DocumentItem, TreeNode } from '@pageindex/sdk'
 import { getConnectedPageIndexClient, getPageIndexClient } from '../utils/pageindexClient'
 
 type ListDocumentsShape = DocumentItem[] | { documents: DocumentItem[] }
@@ -25,7 +25,10 @@ const listDocuments = async (folderId?: string | null, limit = 100): Promise<Doc
   return normalizeDocuments(response)
 }
 
-const findDocumentByName = async (docName: string, folderId?: string | null): Promise<DocumentItem> => {
+const findDocumentByName = async (
+  docName: string,
+  folderId?: string | null
+): Promise<DocumentItem> => {
   const docs = await listDocuments(folderId)
   const exact = docs.find((doc) => doc.name === docName)
   if (exact) {
@@ -127,7 +130,10 @@ export const ragTools = {
         const pageNodes = nodes.filter((node) => node.page_index === page)
         return {
           page,
-          text: pageNodes.map((node) => node.text).filter(Boolean).join('\n\n'),
+          text: pageNodes
+            .map((node) => node.text)
+            .filter(Boolean)
+            .join('\n\n'),
         }
       })
 

@@ -19,6 +19,17 @@ const BASE_SYSTEM_PROMPT =
   'You can use tools to search and read documents to provide accurate information.'
 
 /**
+ * DeepSeek V4 / Pro 在 API 默认开启 thinking 时，多步工具调用要求把上一轮的 `reasoning_content`
+ * 原样带回；未显式 `thinking: true` 时关闭 thinking，避免 400 且与当前 SSE 行为一致。
+ */
+function deepseekProviderOptionsForRequest(thinking?: boolean) {
+  if (thinking === true) {
+    return undefined
+  }
+  return { deepseek: { thinking: { type: 'disabled' as const } } }
+}
+
+/**
  * 动态构建 system prompt。
  * 若用户已选定文档，明确告知 LLM 文档名称，避免它先盲目搜索。
  */
@@ -75,7 +86,9 @@ type DeepSeekGenerateSnapshot = {
  * 支持 findRelevantDocuments / getPageContent / getDocument / getDocumentStructure。
  */
 function extractSources(toolName: string, output: unknown, map: Map<string, DocSource>): void {
-  if (!output || typeof output !== 'object') { return }
+  if (!output || typeof output !== 'object') {
+    return
+  }
   const o = output as Record<string, unknown>
 
   if (toolName === 'findRelevantDocuments') {
@@ -91,7 +104,9 @@ function extractSources(toolName: string, output: unknown, map: Map<string, DocS
     if (docName) {
       const existing = map.get(docName)
       if (existing) {
-        if (pages && !existing.pages) { existing.pages = pages }
+        if (pages && !existing.pages) {
+          existing.pages = pages
+        }
       } else {
         map.set(docName, { docName, pages })
       }
@@ -102,7 +117,9 @@ function extractSources(toolName: string, output: unknown, map: Map<string, DocS
     if (name) {
       const existing = map.get(name)
       if (existing) {
-        if (!existing.docId) { existing.docId = id }
+        if (!existing.docId) {
+          existing.docId = id
+        }
       } else {
         map.set(name, { docName: name, docId: id })
       }
@@ -135,7 +152,10 @@ export class DeepSeekChatService {
         messages: toModelMessages(params),
         tools: ragTools,
         stopWhen: stepCountIs(5),
+        providerOptions: deepseekProviderOptionsForRequest(params.thinking),
       })) as DeepSeekGenerateSnapshot
+
+      console.log('result', JSON.stringify(result, null, 2))
 
       const data: ChatResult = {
         text: result.text,
@@ -190,7 +210,10 @@ export class DeepSeekChatService {
         messages: toModelMessages(params),
         tools: ragTools,
         stopWhen: stepCountIs(5),
+        providerOptions: deepseekProviderOptionsForRequest(params.thinking),
       })
+
+      console.log('generator', JSON.stringify(generator, null, 2))
 
       /**
        * Buffer chunks for the current step.
@@ -221,7 +244,10 @@ export class DeepSeekChatService {
           }
           stepBuffer = []
         } else if (params.thinking === true && part.type === 'reasoning-delta') {
-          stepBuffer.push({ part: 'thinking', delta: (part as { type: 'reasoning-delta'; text: string }).text })
+          stepBuffer.push({
+            part: 'thinking',
+            delta: (part as { type: 'reasoning-delta'; text: string }).text,
+          })
         } else if (part.type === 'text-delta') {
           stepBuffer.push({ part: 'answer', delta: part.text })
         } else if (part.type === 'tool-call') {
@@ -229,7 +255,12 @@ export class DeepSeekChatService {
             stepBuffer.push({ part: 'tool-call', data: toChatToolCall(part) })
           }
         } else if (part.type === 'tool-result') {
-          const p = part as unknown as { toolName: string; output: unknown; toolCallId: string; input: unknown }
+          const p = part as unknown as {
+            toolName: string
+            output: unknown
+            toolCallId: string
+            input: unknown
+          }
           extractSources(p.toolName, p.output, sourcesMap)
           if (params.includeToolEvents === true) {
             stepBuffer.push({ part: 'tool-result', data: toChatToolResult(part) })

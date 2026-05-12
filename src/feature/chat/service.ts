@@ -213,13 +213,12 @@ export class DeepSeekChatService {
         providerOptions: deepseekProviderOptionsForRequest(params.thinking),
       })
 
-      console.log('generator', JSON.stringify(generator, null, 2))
-
       /**
-       * Buffer chunks for the current step.
-       * We only decide whether the text in a step is "answer" or "step-text" once we
-       * see step-finish (finishReason tells us if tools were called next or not).
+       * When `includeStepText` is true, buffer the whole step so we can map "answer"
+       * chunks to `step-text` vs final answer at `finish-step`. Otherwise stream
+       * deltas immediately so the client does not wait until the step completes.
        */
+      const bufferStep = params.includeStepText === true
       let stepBuffer: ChatSseChunk[] = []
 
       for await (const part of generator.fullStream) {
@@ -244,15 +243,27 @@ export class DeepSeekChatService {
           }
           stepBuffer = []
         } else if (params.thinking === true && part.type === 'reasoning-delta') {
-          stepBuffer.push({
-            part: 'thinking',
-            delta: (part as { type: 'reasoning-delta'; text: string }).text,
-          })
+          const delta = (part as { type: 'reasoning-delta'; text: string }).text
+          if (bufferStep) {
+            stepBuffer.push({ part: 'thinking', delta })
+          } else {
+            yield { part: 'thinking', delta }
+          }
         } else if (part.type === 'text-delta') {
-          stepBuffer.push({ part: 'answer', delta: part.text })
+          const chunk: ChatSseChunk = { part: 'answer', delta: part.text }
+          if (bufferStep) {
+            stepBuffer.push(chunk)
+          } else {
+            yield chunk
+          }
         } else if (part.type === 'tool-call') {
           if (params.includeToolEvents === true) {
-            stepBuffer.push({ part: 'tool-call', data: toChatToolCall(part) })
+            const chunk: ChatSseChunk = { part: 'tool-call', data: toChatToolCall(part) }
+            if (bufferStep) {
+              stepBuffer.push(chunk)
+            } else {
+              yield chunk
+            }
           }
         } else if (part.type === 'tool-result') {
           const p = part as unknown as {
@@ -263,11 +274,21 @@ export class DeepSeekChatService {
           }
           extractSources(p.toolName, p.output, sourcesMap)
           if (params.includeToolEvents === true) {
-            stepBuffer.push({ part: 'tool-result', data: toChatToolResult(part) })
+            const chunk: ChatSseChunk = { part: 'tool-result', data: toChatToolResult(part) }
+            if (bufferStep) {
+              stepBuffer.push(chunk)
+            } else {
+              yield chunk
+            }
           }
         } else if (part.type === 'tool-error') {
           if (params.includeToolEvents === true) {
-            stepBuffer.push({ part: 'tool-error', data: toChatToolError(part) })
+            const chunk: ChatSseChunk = { part: 'tool-error', data: toChatToolError(part) }
+            if (bufferStep) {
+              stepBuffer.push(chunk)
+            } else {
+              yield chunk
+            }
           }
         }
       }

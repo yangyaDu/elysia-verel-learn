@@ -39,7 +39,7 @@ export const chatBodySchema = t.Object({
   docNames: t.Optional(t.Array(t.String({ minLength: 1 }))),
   /** 调试用：是否输出工具调用/结果/错误事件。默认 false，避免前端把工具 JSON 拼进正文。 */
   includeToolEvents: t.Optional(t.Boolean()),
-  /** 调试用：是否输出工具调用前的中间说明文字。默认 false。 */
+  /** 调试用：为 true 时整步缓冲后再输出，便于把工具步正文标成 `step-text`；默认 false，正文 token 立即 SSE 以降低首字延迟。 */
   includeStepText: t.Optional(t.Boolean()),
 })
 

@@ -70,6 +70,10 @@ export function bulidSseResponse(
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
+        // First bytes ASAP so the client completes fetch headers / first read() without
+        // waiting for RAG + first model step to finish (see chatStream buffering).
+        enqueue(controller, ': stream-open\n\n')
+
         for await (const chunk of streamIterable) {
           if (closed) {
             break
@@ -118,6 +122,7 @@ export function bulidSseResponse(
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',
       connection: 'keep-alive',
+      'x-accel-buffering': 'no',
     },
   })
 }

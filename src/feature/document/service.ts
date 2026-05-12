@@ -1,41 +1,49 @@
-import { errCodeEnum, type ErrCodeT } from '../../define/errDefine'
+import { errCodeEnum, type ErrInfo } from '../../define/errDefine'
 import { MINIO_BUCKET_NAME, getMinioClient } from '../../utils/minioClient'
 import { getPageIndexClient } from '../../utils/pageindexClient'
-import type { CheckStatusResponse, DocumentMetadata, UploadDocumentResponse } from './model'
+import {
+  CheckStatusResponse,
+  CheckStatusResult,
+  DocParams,
+  DocumentMetadata,
+  GetPreviewParams,
+  ListDocumentsParams,
+  UploadDocumentResponse,
+  UploadPdfParams,
+} from './model'
 
-export type CheckStatusResponseType = CheckStatusResponse | null
-export type UploadDocumentResponseType = UploadDocumentResponse | null
-
-// 定义参数类
-export class UploadPdfParams {
-  file!: File
-}
-
-export class GetDocumentParams {
-  docId!: string
-}
-
-export class ListDocumentsParams {
-  limit?: number = 50
-  offset?: number = 0
-}
-
-export class DeleteDocumentParams {
-  docId!: string
-}
-
-export class CheckStatusParams {
-  docId!: string
+type TreeNodeCompatFields = {
+  start_index?: number
+  end_index?: number
+  startIndex?: number
+  endIndex?: number
+  summary?: string
 }
 
 export class DocumentService {
-  async uploadPdf(params: UploadPdfParams): Promise<[ErrCodeT, UploadDocumentResponseType]> {
+  async getPreviewUrl(params: GetPreviewParams): Promise<[ErrInfo, string | null]> {
+    const { s3Key } = params
+    const minioClient = getMinioClient()
+    if (!minioClient) {
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
+    }
+
+    try {
+      const url = await minioClient.presignedGetObject(MINIO_BUCKET_NAME, s3Key, 3600)
+      return [errCodeEnum.ERR_SUCCESS, url]
+    } catch (err) {
+      console.error('[documentService/getPreviewUrl]', err)
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
+    }
+  }
+
+  async uploadPdf(params: UploadPdfParams): Promise<[ErrInfo, UploadDocumentResponse | null]> {
     const { file } = params
     const pageIndexClient = getPageIndexClient()
     const minioClient = getMinioClient()
 
     if (!pageIndexClient || !minioClient) {
-      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
 
     try {
@@ -47,100 +55,129 @@ export class DocumentService {
       })
 
       const response = await pageIndexClient.api.submitDocument(buffer, file.name)
+      const [codeErr, url] = await this.getPreviewUrl({ s3Key })
+      if (codeErr !== errCodeEnum.ERR_SUCCESS) {
+        return [codeErr, null]
+      }
 
-      return [
-        errCodeEnum.ERR_SUCCESS.code,
-        {
-          doc_id: response.doc_id,
-          s3_key: s3Key,
-          status: 'indexed and stored',
-        },
-      ]
+      const result: UploadDocumentResponse = {
+        doc_id: response.doc_id,
+        s3_key: s3Key,
+        url: url ?? undefined,
+        status: 'indexed and stored',
+      }
+
+      return [errCodeEnum.ERR_SUCCESS, result]
     } catch (err) {
       console.error('[documentService/uploadPdf]', err)
-      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
     }
   }
 
-  async getDocument(params: GetDocumentParams): Promise<[ErrCodeT, DocumentMetadata | null]> {
+  async getDocument(params: DocParams): Promise<[ErrInfo, DocumentMetadata | null]> {
     const { docId } = params
     const client = getPageIndexClient()
     if (!client) {
-      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
 
     try {
       const response = await client.api.getDocument(docId)
-      return [errCodeEnum.ERR_SUCCESS.code, response]
+      const data: DocumentMetadata = {
+        id: response.id,
+        name: response.name,
+        status: response.status ?? '',
+        created_at: response.createdAt ?? undefined,
+        folder_id: response.folderId ?? undefined,
+      }
+
+      return [errCodeEnum.ERR_SUCCESS, data]
     } catch (err) {
       console.error('[documentService/getDocument]', err)
-      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
     }
   }
 
-  async listDocuments(params: ListDocumentsParams): Promise<[ErrCodeT, DocumentMetadata[] | null]> {
-    const { limit = 50, offset = 0 } = params
+  async listDocuments(params: ListDocumentsParams): Promise<[ErrInfo, DocumentMetadata[] | null]> {
+    const limitNum = params.limit ? parseInt(String(params.limit)) : 50
+    const offsetNum = params.offset ? parseInt(String(params.offset)) : 0
+
     const client = getPageIndexClient()
     if (!client) {
-      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
 
     try {
-      const response = await client.api.listDocuments({ limit, offset })
-      return [errCodeEnum.ERR_SUCCESS.code, response as unknown as DocumentMetadata[]]
+      // SDK 类型定义为 { documents: DocumentItem[] }，但实际 API 直接返回数组
+      const response = (await client.api.listDocuments({
+        limit: limitNum,
+        offset: offsetNum,
+      })) as unknown as import('@pageindex/sdk').DocumentItem[]
+      if (!response) {
+        return [errCodeEnum.ERR_NOT_FOUND, null]
+      }
+
+      const data = response.map((item) => {
+        const doc: DocumentMetadata = {
+          id: item.id,
+          name: item.name,
+          status: item.status ?? '',
+          created_at: item.createdAt ?? undefined,
+          folder_id: item.folderId ?? undefined,
+        }
+        return doc
+      })
+      return [errCodeEnum.ERR_SUCCESS, data]
     } catch (err) {
       console.error('[documentService/listDocuments]', err)
-      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
     }
   }
 
-  async deleteDocument(params: DeleteDocumentParams): Promise<[ErrCodeT, null]> {
+  async deleteDocument(params: DocParams): Promise<[ErrInfo, null]> {
     const { docId } = params
     const client = getPageIndexClient()
     if (!client) {
-      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
 
     try {
       await client.api.deleteDocument(docId)
-      return [errCodeEnum.ERR_SUCCESS.code, null]
+      return [errCodeEnum.ERR_SUCCESS, null]
     } catch (err) {
       console.error('[documentService/deleteDocument]', err)
-      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
     }
   }
 
-  async checkStatus(params: CheckStatusParams): Promise<[ErrCodeT, CheckStatusResponseType]> {
+  async checkStatus(params: DocParams): Promise<[ErrInfo, CheckStatusResponse | null]> {
     const { docId } = params
     const client = getPageIndexClient()
     if (!client) {
-      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null]
+      return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
 
     try {
       const response = await client.api.getTree(docId)
-      return [
-        errCodeEnum.ERR_SUCCESS.code,
-        {
-          doc_id: response.doc_id,
-          status: response.status,
-          result: response.result?.map((item) => ({
-            title: item.title,
-            node_id: item.node_id,
-            page_index: item.page_index,
-            text: item.text,
-            nodes: (item.nodes ?? []).map((node) => ({
-              title: node.title,
-              node_id: node.node_id,
-              page_index: node.page_index,
-              text: node.text,
-            })),
-          })),
-        },
-      ]
+      const result = new CheckStatusResponse()
+      result.doc_id = response.doc_id
+      result.status = response.status
+      result.result = response.result?.map((item) => {
+        const compatibleItem = item as typeof item & TreeNodeCompatFields
+        const node = new CheckStatusResult()
+        node.title = item.title
+        node.node_id = item.node_id
+        node.start_index = compatibleItem.start_index ?? compatibleItem.startIndex ?? 0
+        node.end_index = compatibleItem.end_index ?? compatibleItem.endIndex ?? 0
+        node.summary = compatibleItem.summary ?? ''
+        node.text = item.text
+        return node
+      })
+
+      return [errCodeEnum.ERR_SUCCESS, result]
     } catch (err) {
       console.error('[documentService/checkStatus]', err)
-      return [errCodeEnum.ERR_THIRDPARTY_ERROR.code, null]
+      return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
     }
   }
 }

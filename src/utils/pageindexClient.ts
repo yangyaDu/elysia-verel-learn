@@ -25,3 +25,20 @@ class PageIndexClientSingleton {
 export function getPageIndexClient() {
   return PageIndexClientSingleton.getInstance()
 }
+
+/**
+ * 返回已确保 MCP transport 连接的 PageIndex 客户端。
+ *
+ * PageIndexClient 底层使用 MCP 长连接，默认 60s 空闲后自动断开。
+ * 每次工具调用前通过此函数检查并按需重连，避免空闲超时后首次调用失败。
+ */
+export async function getConnectedPageIndexClient(): Promise<PageIndexClient> {
+  const client = getPageIndexClient()
+  if (!client) {
+    throw new Error('PageIndex Client not configured (missing PAGEINDEX_API_KEY)')
+  }
+  if (!client.isConnected()) {
+    await client.connect()
+  }
+  return client
+}

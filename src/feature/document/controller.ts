@@ -2,26 +2,42 @@ import { Elysia, t } from 'elysia'
 import { buildResponseBody, createApiResponseType } from '../../utils/msgWrapper'
 import {
   checkStatusResponseSchema,
+  docParamsSchema,
   documentMetadataSchema,
+  getPreviewParamsSchema,
   listDocumentsResponseSchema,
+  listQuerySchema,
+  uploadBodySchema,
   uploadDocumentResponseSchema,
 } from './model'
 import { documentService } from './service'
 
 export const documentController = new Elysia({ prefix: '/document' })
-  .post(
-    '/upload',
-    async ({ body: { file } }) => {
-      const [code, data] = await documentService.uploadPdf({ file })
-      return buildResponseBody(code, data)
+  .get(
+    '/preview/:s3Key',
+    async ({ params }) => {
+      const [err, data] = await documentService.getPreviewUrl(params)
+      return buildResponseBody(err, data)
     },
     {
-      body: t.Object({
-        file: t.File({
-          type: 'application/pdf',
-          maxSize: '20m',
-        }),
-      }),
+      params: getPreviewParamsSchema,
+      response: {
+        200: createApiResponseType(t.String()),
+      },
+      detail: {
+        tags: ['document'],
+        summary: '获取 PDF 预览链接 (MinIO Presigned URL)',
+      },
+    }
+  )
+  .post(
+    '/upload',
+    async ({ body }) => {
+      const [err, data] = await documentService.uploadPdf(body)
+      return buildResponseBody(err, data)
+    },
+    {
+      body: uploadBodySchema,
       response: {
         200: createApiResponseType(uploadDocumentResponseSchema),
       },
@@ -33,18 +49,15 @@ export const documentController = new Elysia({ prefix: '/document' })
   )
   .get(
     '/list',
-    async ({ query: { limit, offset } }) => {
-      const [code, data] = await documentService.listDocuments({
-        limit: limit ? parseInt(limit) : 50,
-        offset: offset ? parseInt(offset) : 0,
+    async ({ query }) => {
+      const [err, data] = await documentService.listDocuments({
+        limit: query.limit,
+        offset: query.offset,
       })
-      return buildResponseBody(code, { documents: data ?? [] })
+      return buildResponseBody(err, data ? { documents: data } : null)
     },
     {
-      query: t.Object({
-        limit: t.Optional(t.String()),
-        offset: t.Optional(t.String()),
-      }),
+      query: listQuerySchema,
       response: {
         200: createApiResponseType(listDocumentsResponseSchema),
       },
@@ -56,14 +69,12 @@ export const documentController = new Elysia({ prefix: '/document' })
   )
   .get(
     '/:docId',
-    async ({ params: { docId } }) => {
-      const [code, data] = await documentService.getDocument({ docId })
-      return buildResponseBody(code, data)
+    async ({ params }) => {
+      const [err, data] = await documentService.getDocument(params)
+      return buildResponseBody(err, data)
     },
     {
-      params: t.Object({
-        docId: t.String(),
-      }),
+      params: docParamsSchema,
       response: {
         200: createApiResponseType(documentMetadataSchema),
       },
@@ -75,14 +86,12 @@ export const documentController = new Elysia({ prefix: '/document' })
   )
   .delete(
     '/:docId',
-    async ({ params: { docId } }) => {
-      const [code, data] = await documentService.deleteDocument({ docId })
-      return buildResponseBody(code, data)
+    async ({ params }) => {
+      const [err, data] = await documentService.deleteDocument(params)
+      return buildResponseBody(err, data)
     },
     {
-      params: t.Object({
-        docId: t.String(),
-      }),
+      params: docParamsSchema,
       detail: {
         tags: ['document'],
         summary: '删除文档',
@@ -91,14 +100,12 @@ export const documentController = new Elysia({ prefix: '/document' })
   )
   .get(
     '/status/:docId',
-    async ({ params: { docId } }) => {
-      const [code, data] = await documentService.checkStatus({ docId })
-      return buildResponseBody(code, data)
+    async ({ params }) => {
+      const [err, data] = await documentService.checkStatus(params)
+      return buildResponseBody(err, data)
     },
     {
-      params: t.Object({
-        docId: t.String(),
-      }),
+      params: docParamsSchema,
       response: {
         200: createApiResponseType(checkStatusResponseSchema),
       },

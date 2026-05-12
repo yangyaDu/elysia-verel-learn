@@ -1,3 +1,6 @@
+# 从仓库根目录执行：docker compose -f docker/docker-compose.yml --env-file .env up -d
+# （--env-file 用于 compose 内 ${MYSQL_HOST_PORT}、${DEEPSEEK_API_KEY} 等插值；MySQL 凭证由各服务 env_file 读根目录 .env）
+
 services:
   minio:
     image: quay.io/minio/minio
@@ -12,6 +15,8 @@ services:
       - ./data:/data # 文件映射地址
     command: server /data --console-address ":9001"
     restart: always
+    networks:
+      - app_net
 
   pageindex-api:
     build:
@@ -27,6 +32,8 @@ services:
     volumes:
       - ./pageindex_data:/app/output # 存放向量索引和解析结果
     restart: always
+    networks:
+      - app_net
 
   # 自动创建 bucket 的可选工具容器
   createbuckets:
@@ -40,3 +47,31 @@ services:
       /usr/bin/mc anonymous set public myminio/documents;
       exit 0;
       "
+    networks:
+      - app_net
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql8-pageindex
+    restart: always
+    env_file:
+      - ../.env
+    ports:
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+networks:
+  app_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

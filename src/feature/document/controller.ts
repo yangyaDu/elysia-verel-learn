@@ -5,7 +5,6 @@ import {
   docParamsSchema,
   documentMetadataSchema,
   getPreviewParamsSchema,
-  listDocumentsResponseSchema,
   listQuerySchema,
   uploadBodySchema,
   uploadDocumentResponseSchema,
@@ -58,12 +57,26 @@ export const documentController = new Elysia({ prefix: '/document' })
     },
     {
       query: listQuerySchema,
-      response: {
-        200: createApiResponseType(listDocumentsResponseSchema),
-      },
       detail: {
         tags: ['document'],
         summary: '获取文档列表',
+      },
+    }
+  )
+  .get(
+    '/status/:docId',
+    async ({ params }) => {
+      const [err, data] = await documentService.checkStatus(params)
+      return buildResponseBody(err, data)
+    },
+    {
+      params: docParamsSchema,
+      response: {
+        200: createApiResponseType(checkStatusResponseSchema),
+      },
+      detail: {
+        tags: ['document'],
+        summary: '检查文档处理状态 (Tree)',
       },
     }
   )
@@ -95,23 +108,6 @@ export const documentController = new Elysia({ prefix: '/document' })
       detail: {
         tags: ['document'],
         summary: '删除文档',
-      },
-    }
-  )
-  .get(
-    '/status/:docId',
-    async ({ params }) => {
-      const [err, data] = await documentService.checkStatus(params)
-      return buildResponseBody(err, data)
-    },
-    {
-      params: docParamsSchema,
-      response: {
-        200: createApiResponseType(checkStatusResponseSchema),
-      },
-      detail: {
-        tags: ['document'],
-        summary: '检查文档处理状态 (Tree)',
       },
     }
   )

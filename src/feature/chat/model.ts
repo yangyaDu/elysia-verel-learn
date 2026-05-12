@@ -23,6 +23,8 @@ export const chatMessageSchema = t.Object({
 export type ChatMessage = typeof chatMessageSchema.static
 
 export const chatBodySchema = t.Object({
+  /** 传入时将会话写入 MySQL（需先 `POST /chat/conversations` 创建会话）。 */
+  conversationId: t.Optional(t.String({ minLength: 36, maxLength: 36 })),
   prompt: t.Optional(
     t.String({
       minLength: 1,
@@ -50,6 +52,7 @@ export class ChatBody {
   docNames?: string[]
   includeToolEvents?: boolean
   includeStepText?: boolean
+  conversationId?: string
 }
 
 // --- Response Schemas & Classes ---
@@ -135,4 +138,14 @@ export const chatDataSchema = t.Object({
       totalTokens: t.Number(),
     })
   ),
+})
+
+export const createConversationBodySchema = t.Object({
+  title: t.Optional(t.String({ maxLength: 500 })),
+  docNames: t.Optional(t.Array(t.String({ minLength: 1 }))),
+  modelId: t.Optional(t.String({ maxLength: 255 })),
+})
+
+export const createConversationResponseSchema = t.Object({
+  id: t.String(),
 })

@@ -11,6 +11,7 @@ import type {
   ChatToolResult,
   ChatUsage,
 } from './model'
+import { persistChatCompletion, persistChatStreamCompletion } from './persistChat'
 
 type DocSource = { docName: string; docId?: string; pages?: string }
 
@@ -187,6 +188,10 @@ export class DeepSeekChatService {
         data.usage = usage
       }
 
+      await persistChatCompletion(params, data).catch((e) => {
+        console.error('[chat] persist failed', e)
+      })
+
       return [errCodeEnum.ERR_SUCCESS, data]
     } catch (err) {
       console.error('[chat]', err)
@@ -202,6 +207,8 @@ export class DeepSeekChatService {
 
     const { model } = configured
     const sourcesMap = new Map<string, DocSource>()
+    let streamAccumText = ''
+    let streamAccumThinking = ''
 
     try {
       const generator = streamText({
@@ -244,12 +251,14 @@ export class DeepSeekChatService {
           stepBuffer = []
         } else if (params.thinking === true && part.type === 'reasoning-delta') {
           const delta = (part as { type: 'reasoning-delta'; text: string }).text
+          streamAccumThinking += delta
           if (bufferStep) {
             stepBuffer.push({ part: 'thinking', delta })
           } else {
             yield { part: 'thinking', delta }
           }
         } else if (part.type === 'text-delta') {
+          streamAccumText += part.text
           const chunk: ChatSseChunk = { part: 'answer', delta: part.text }
           if (bufferStep) {
             stepBuffer.push(chunk)
@@ -302,6 +311,13 @@ export class DeepSeekChatService {
       if (sourcesMap.size > 0) {
         yield { part: 'sources', data: [...sourcesMap.values()] }
       }
+
+      await persistChatStreamCompletion(params, {
+        text: streamAccumText,
+        thinking: streamAccumThinking,
+      }).catch((e) => {
+        console.error('[chatStream] persist failed', e)
+      })
     } catch (err) {
       console.error('[chatStream]', err)
     }

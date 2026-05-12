@@ -1,7 +1,16 @@
+import { randomUUID } from 'node:crypto'
 import { Elysia, t } from 'elysia'
 import { errCodeEnum } from '../../define/errDefine'
+import { db } from '../../db/client'
+import { createConversationRow } from './chatRepo'
 import { buildResponseBody, bulidSseResponse, createApiResponseType } from '../../utils/msgWrapper'
-import { chatBodySchema, chatDataSchema, echoBodySchema } from './model'
+import {
+  chatBodySchema,
+  chatDataSchema,
+  createConversationBodySchema,
+  createConversationResponseSchema,
+  echoBodySchema,
+} from './model'
 import { deepSeekChatService } from './service'
 
 export const chatController = new Elysia()
@@ -17,6 +26,37 @@ export const chatController = new Elysia()
       },
       detail: {
         tags: ['echo'],
+      },
+    }
+  )
+  .post(
+    '/chat/conversations',
+    async ({ body }) => {
+      if (!db) {
+        return buildResponseBody(errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null)
+      }
+      const id = randomUUID()
+      try {
+        await createConversationRow(db, {
+          id,
+          title: body.title,
+          docNames: body.docNames ?? null,
+          modelId: body.modelId ?? null,
+        })
+        return buildResponseBody(errCodeEnum.ERR_SUCCESS, { id })
+      } catch (err) {
+        console.error('[chat/conversations]', err)
+        return buildResponseBody(errCodeEnum.ERR_THIRDPARTY_ERROR, null)
+      }
+    },
+    {
+      body: createConversationBodySchema,
+      response: {
+        200: createApiResponseType(createConversationResponseSchema),
+      },
+      detail: {
+        tags: ['chat'],
+        summary: '创建会话（用于 MySQL 中持久化后续 /chat 与 /chat/stream）',
       },
     }
   )

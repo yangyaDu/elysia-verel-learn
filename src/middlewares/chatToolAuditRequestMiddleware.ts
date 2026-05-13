@@ -3,7 +3,7 @@ import {
   clearChatToolAuditRequestScope,
   setChatToolAuditRequestScope,
   type ChatToolAuditRequestScope,
-} from '../feature/chat/chatToolAuditRequestContext'
+} from '../lib/chatToolAudit/requestContext'
 
 function readRequestIdFromHeaders(set: {
   headers: Record<string, string | number | undefined>
@@ -27,7 +27,7 @@ function scopeForPath(
 
 /**
  * 仅对 `/chat`、`/chat/stream` 写入审计请求域（requestId + route），供 service 通过 `request` 解析。
- * 与 {@link chatToolAuditRequestContext} 成对使用。
+ * 与 `lib/chatToolAudit/requestContext` 成对使用。
  */
 export const chatToolAuditRequestMiddleware = new Elysia({ name: 'chat-tool-audit-request' })
   .onBeforeHandle(({ request, path, set }) => {

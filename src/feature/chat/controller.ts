@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { Elysia, t } from 'elysia'
-import { errCodeEnum } from '../../define/errDefine'
+import { BusinessError, errCodeEnum } from '../../define/errDefine'
+import { db } from '../../db/client'
+import { authMiddleware, contextAuth } from '../../middlewares/authMiddleware'
 import { chatToolAuditRequestMiddleware } from '../../middlewares/chatToolAuditRequestMiddleware'
+import { expectAuthenticated } from '../../types/auth'
 import { buildResponseBody, bulidSseResponse, createApiResponseType } from '../../utils/msgWrapper'
+import { createConversationRow } from './repo'
+import { deepSeekChatService, ensureConversationAccess } from './service'
 import {
   chatBodySchema,
   chatDataSchema,
@@ -10,14 +15,19 @@ import {
   createConversationResponseSchema,
   echoBodySchema,
 } from './model'
-import { deepSeekChatService } from './service'
 
 export const chatController = new Elysia()
+  .use(authMiddleware)
   .use(chatToolAuditRequestMiddleware)
   .post(
     '/chat',
-    async ({ body, request }) => {
-      const [err, data] = await deepSeekChatService.chat(body, { request })
+    async (ctx) => {
+      const user = expectAuthenticated(contextAuth(ctx))
+      const { body, request } = ctx
+      if (body.conversationId) {
+        await ensureConversationAccess(body.conversationId, user)
+      }
+      const [err, data] = await deepSeekChatService.chat(body, { request, auth: user })
       return buildResponseBody(err, data)
     },
     {
@@ -28,14 +38,20 @@ export const chatController = new Elysia()
       detail: {
         tags: ['chat'],
         description:
-          '可选 `thinking: true` 启用深度思考（需模型与上游 API 支持）；成功时可能在 `data.thinking` 中返回推理过程文本。',
+          '可选 `thinking: true` 启用深度思考（须登录）。若带 `conversationId` 须 `Authorization: Bearer`，且会话属于当前用户。',
+        security: [{ bearerAuth: [] }],
       },
     }
   )
   .post(
     '/chat/stream',
-    ({ body, request }) => {
-      const streamIterable = deepSeekChatService.chatStream(body, { request })
+    async (ctx) => {
+      const user = expectAuthenticated(contextAuth(ctx))
+      const { body, request } = ctx
+      if (body.conversationId) {
+        await ensureConversationAccess(body.conversationId, user)
+      }
+      const streamIterable = deepSeekChatService.chatStream(body, { request, auth: user })
       return bulidSseResponse(streamIterable)
     },
     {
@@ -46,13 +62,46 @@ export const chatController = new Elysia()
       detail: {
         tags: ['chat'],
         description:
-          '默认仅 `data:` 正文流；`thinking: true` 时并行发送 `event: thinking` 承载推理增量，结束仍为 `event: done`。',
+          '流式聊天（须登录）。若带 `conversationId` 须 Bearer 且会话属于当前用户。',
+        security: [{ bearerAuth: [] }],
+      },
+    }
+  )
+  .post(
+    '/chat/conversations',
+    async (ctx) => {
+      const user = expectAuthenticated(contextAuth(ctx))
+      const { body } = ctx
+      if (!db) {
+        throw new BusinessError(errCodeEnum.ERR_SERVER_INTERNAL_ERROR, 'Database not configured')
+      }
+      const id = randomUUID()
+      await createConversationRow(db, {
+        id,
+        userId: user.userId,
+        title: body.title,
+        docNames: body.docNames,
+        modelId: body.modelId,
+      })
+      return buildResponseBody(errCodeEnum.ERR_SUCCESS, { id })
+    },
+    {
+      body: createConversationBodySchema,
+      response: {
+        200: createApiResponseType(createConversationResponseSchema),
+      },
+      detail: {
+        tags: ['chat'],
+        summary: '创建聊天会话',
+        security: [{ bearerAuth: [] }],
       },
     }
   )
   .post(
     '/echo',
-    ({ body }) => {
+    (ctx) => {
+      expectAuthenticated(contextAuth(ctx))
+      const { body } = ctx
       return buildResponseBody(errCodeEnum.ERR_SUCCESS, body)
     },
     {
@@ -62,6 +111,7 @@ export const chatController = new Elysia()
       },
       detail: {
         tags: ['echo'],
+        security: [{ bearerAuth: [] }],
       },
     }
   )

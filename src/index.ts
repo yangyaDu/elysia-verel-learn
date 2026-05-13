@@ -1,6 +1,7 @@
 import { cors } from '@elysiajs/cors'
 import swagger from '@elysiajs/swagger'
 import { Elysia } from 'elysia'
+import { authController } from './feature/auth/controller'
 import { chatController } from './feature/chat/controller'
 import { documentController } from './feature/document/controller'
 import { errorMiddleware, loggerMiddleware } from './middlewares/middlewares'
@@ -19,6 +20,7 @@ const app = new Elysia()
       credentials: true,
     })
   )
+  .use(authController)
   .use(chatController)
   .use(documentController)
 
@@ -28,6 +30,16 @@ app.use(
       info: {
         title: 'ZenithStrat - Backend API Endpoint',
         version: '1.0',
+      },
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: '登录接口返回的 access token',
+          },
+        },
       },
     },
     specPath: '/swagger.json',

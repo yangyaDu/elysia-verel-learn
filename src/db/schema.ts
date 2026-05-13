@@ -76,14 +76,38 @@ export const documentTreeSnapshotsRelations = relations(documentTreeSnapshots, (
   }),
 }))
 
-export const conversations = mysqlTable('conversations', {
-  id: varchar('id', { length: 36 }).primaryKey(),
-  title: text('title'),
-  docNamesJson: json('doc_names_json').$type<string[] | null>(),
-  modelId: varchar('model_id', { length: 255 }),
-  createdAt: ts('created_at'),
-  updatedAt: ts('updated_at'),
-})
+/** 占位用户，用于迁移历史无 `user_id` 的对话行（勿用于真实登录）。 */
+export const LEGACY_CONVERSATION_USER_ID = 1010101010101010101n
+
+export const users = mysqlTable(
+  'users',
+  {
+    id: bigint('id', { mode: 'bigint' }).primaryKey(),
+    email: varchar('email', { length: 255 }).notNull(),
+    passwordHash: text('password_hash').notNull(),
+    createdAt: ts('created_at'),
+    updatedAt: ts('updated_at'),
+  },
+  (table) => [uniqueIndex('users_email_uidx').on(table.email)]
+)
+
+export const usersRelations = relations(users, ({ many }) => ({
+  conversations: many(conversations),
+}))
+
+export const conversations = mysqlTable(
+  'conversations',
+  {
+    id: varchar('id', { length: 36 }).primaryKey(),
+    userId: bigint('user_id', { mode: 'bigint' }).notNull(),
+    title: text('title'),
+    docNamesJson: json('doc_names_json').$type<string[] | null>(),
+    modelId: varchar('model_id', { length: 255 }),
+    createdAt: ts('created_at'),
+    updatedAt: ts('updated_at'),
+  },
+  (table) => [index('conversations_user_id_idx').on(table.userId)]
+)
 
 export const chatMessages = mysqlTable(
   'chat_messages',
@@ -105,8 +129,12 @@ export const chatMessages = mysqlTable(
   (table) => [uniqueIndex('chat_messages_conv_seq_uidx').on(table.conversationId, table.sequenceNo)]
 )
 
-export const conversationsRelations = relations(conversations, ({ many }) => ({
+export const conversationsRelations = relations(conversations, ({ many, one }) => ({
   messages: many(chatMessages),
+  user: one(users, {
+    fields: [conversations.userId],
+    references: [users.id],
+  }),
 }))
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({

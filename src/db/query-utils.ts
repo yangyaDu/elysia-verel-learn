@@ -278,7 +278,7 @@ export async function insertDynamic<TTable extends MySqlTable>(
  * 动态更新：`WHERE` 由 `filters` 按等值 `AND` 拼接（`undefined` / `null` / `''` 不参与条件，与 `findManyDynamic` 一致）。
  * 若过滤后没有任何 `WHERE` 条件，会抛错，避免误更新全表。
  *
- * `patch` 的列值可为字面量，或 Drizzle `sql` 模板（与 `chatRepo.touchConversation` 里 `updatedAt` 的写法一致）。
+ * `patch` 的列值可为字面量，或 Drizzle `sql` 模板（与 `feature/chat/repo` 里 `touchConversation` 的 `updatedAt` 写法一致）。
  * 返回值为 MySQL `affectedRows`（未识别结果结构时为 `0`）。
  */
 export async function updateDynamic<TTable extends MySqlTable>(

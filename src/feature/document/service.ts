@@ -9,7 +9,7 @@ import {
   insertDocumentRow,
   listDocumentsFromDb,
   upsertTreeSnapshot,
-} from './documentRepo'
+} from './repo'
 import { MINIO_BUCKET_NAME, getMinioClient } from '../../utils/minioClient'
 import { getPageIndexClient } from '../../utils/pageindexClient'
 import {

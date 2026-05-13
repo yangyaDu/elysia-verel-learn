@@ -1,5 +1,5 @@
+import type { ChatToolCall, ChatToolError, ChatToolResult } from '../../feature/chat/model'
 import { plgJsonLog } from '../../utils/plgLog'
-import type { ChatToolCall, ChatToolError, ChatToolResult } from './model'
 
 export type ChatToolAuditRoute = 'chat' | 'chat/stream'
 

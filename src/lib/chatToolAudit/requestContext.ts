@@ -1,5 +1,7 @@
 import type { ChatToolAuditRoute } from './toolAudit'
 
+export type { ChatToolAuditRoute }
+
 export type ChatToolAuditRequestScope = {
   requestId?: string
   route: ChatToolAuditRoute

@@ -28,7 +28,7 @@ export const chatMessageSchema = t.Object({
 export type ChatMessage = typeof chatMessageSchema.static
 
 export const chatBodySchema = t.Object({
-  /** 传入时将会话写入 MySQL（需先 `POST /chat/conversations` 创建会话）。 */
+  /** 传入时将会话写入 MySQL；须先 `POST /auth/login` 获取 token，再 `POST /chat/conversations` 创建会话，且请求须带 `Authorization: Bearer`。 */
   conversationId: t.Optional(t.String({ minLength: 36, maxLength: 36 })),
   prompt: t.Optional(
     t.String({

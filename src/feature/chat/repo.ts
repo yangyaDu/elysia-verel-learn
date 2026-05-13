@@ -4,10 +4,17 @@ import { chatMessages, conversations } from '../../db/schema'
 
 export async function createConversationRow(
   db: DbClient,
-  row: { id: string; title?: string | null; docNames?: string[] | null; modelId?: string | null }
+  row: {
+    id: string
+    userId: bigint
+    title?: string | null
+    docNames?: string[] | null
+    modelId?: string | null
+  }
 ) {
   await db.insert(conversations).values({
     id: row.id,
+    userId: row.userId,
     title: row.title ?? null,
     docNamesJson: row.docNames ?? null,
     modelId: row.modelId ?? null,
@@ -17,7 +24,13 @@ export async function createConversationRow(
 
 export async function findConversationById(db: DbClient, id: string) {
   return db.query.conversations.findFirst({
-    where: (c, { eq }) => eq(c.id, id),
+    where: (c, { eq: eqFn }) => eqFn(c.id, id),
+  })
+}
+
+export async function findConversationForUser(db: DbClient, id: string, userId: bigint) {
+  return db.query.conversations.findFirst({
+    where: (c, { and: andFn, eq: eqFn }) => andFn(eqFn(c.id, id), eqFn(c.userId, userId)),
   })
 }
 

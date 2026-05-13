@@ -1,6 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import { generateText, stepCountIs, streamText, type ModelMessage } from 'ai'
-import { errCodeEnum, type ErrInfo } from '../../define/errDefine'
+import { BusinessError, errCodeEnum, type ErrInfo } from '../../define/errDefine'
+import { db } from '../../db/client'
+import { getChatToolAuditRequestScope } from '../../lib/chatToolAudit/requestContext'
+import { startChatToolAudit, type ChatToolAuditRequestMeta, type ChatToolAuditRoute } from '../../lib/chatToolAudit/toolAudit'
 import { ragTools } from '../../tools/documentTool'
+import type { AuthContext } from '../../types/auth'
 import { getDeepSeekChatModel } from '../../utils/deepseekClient'
 import type { ChatSseChunk } from '../../utils/msgWrapper'
 import type {
@@ -11,12 +16,127 @@ import type {
   ChatToolResult,
   ChatUsage,
 } from './model'
-import { getChatToolAuditRequestScope } from './chatToolAuditRequestContext'
-import { startChatToolAudit, type ChatToolAuditRequestMeta, type ChatToolAuditRoute } from './toolAudit'
+import {
+  findConversationForUser,
+  getMaxSequenceNo,
+  insertChatMessage,
+  touchConversation,
+} from './repo'
 
 /** 可选传入 `request`（由 chat 路由中间件写入审计域）；单测等可继续传 `requestId`。 */
 export type ChatServiceInvokeContext = ChatToolAuditRequestMeta & {
   request?: Request
+  auth?: AuthContext | null
+}
+
+export async function ensureConversationAccess(
+  conversationId: string,
+  auth: AuthContext
+): Promise<void> {
+  if (!db) {
+    throw new BusinessError(errCodeEnum.ERR_SERVER_INTERNAL_ERROR, 'Database not configured')
+  }
+  const row = await findConversationForUser(db, conversationId, auth.userId)
+  if (!row) {
+    throw new BusinessError(errCodeEnum.ERR_FORBIDDEN)
+  }
+}
+
+function serializeUserTurnForPersist(params: ChatBody): string {
+  return JSON.stringify({
+    prompt: params.prompt ?? null,
+    messages: params.messages ?? null,
+    docNames: params.docNames ?? null,
+  })
+}
+
+async function persistChatCompletion(
+  params: ChatBody,
+  data: ChatResult,
+  authUserId: bigint
+): Promise<void> {
+  if (!params.conversationId || !data) {
+    return
+  }
+  if (!db) {
+    return
+  }
+  const conv = await findConversationForUser(db, params.conversationId, authUserId)
+  if (!conv) {
+    console.warn('[persistChat] conversation not found or not owned:', params.conversationId)
+    return
+  }
+
+  let seq = await getMaxSequenceNo(db, params.conversationId)
+  seq += 1
+  await insertChatMessage(db, {
+    id: randomUUID(),
+    conversationId: params.conversationId,
+    sequenceNo: seq,
+    role: 'user',
+    content: serializeUserTurnForPersist(params),
+  })
+
+  seq += 1
+  await insertChatMessage(db, {
+    id: randomUUID(),
+    conversationId: params.conversationId,
+    sequenceNo: seq,
+    role: 'assistant',
+    content: data.text,
+    thinking: data.thinking ?? null,
+    usageJson: data.usage ?? null,
+    toolCallsJson: data.toolCalls ?? null,
+    toolResultsJson: data.toolResults ?? null,
+    toolErrorsJson: data.toolErrors ?? null,
+  })
+
+  await touchConversation(db, params.conversationId)
+}
+
+async function persistChatStreamCompletion(
+  params: ChatBody,
+  payload: { text: string; thinking: string },
+  authUserId: bigint
+): Promise<void> {
+  if (!params.conversationId) {
+    return
+  }
+  if (!db) {
+    return
+  }
+  const conv = await findConversationForUser(db, params.conversationId, authUserId)
+  if (!conv) {
+    console.warn('[persistChatStream] conversation not found or not owned:', params.conversationId)
+    return
+  }
+
+  let seq = await getMaxSequenceNo(db, params.conversationId)
+  seq += 1
+  await insertChatMessage(db, {
+    id: randomUUID(),
+    conversationId: params.conversationId,
+    sequenceNo: seq,
+    role: 'user',
+    content: serializeUserTurnForPersist(params),
+  })
+
+  seq += 1
+  const thinking = payload.thinking.length > 0 ? payload.thinking : null
+  await insertChatMessage(db, {
+    id: randomUUID(),
+    conversationId: params.conversationId,
+    sequenceNo: seq,
+    role: 'assistant',
+    content: payload.text.length > 0 ? payload.text : ' ',
+    thinking,
+    usageJson: null,
+    toolCallsJson: null,
+    toolResultsJson: null,
+    toolErrorsJson: null,
+  })
+
+  await touchConversation(db, params.conversationId)
 }
 
 function resolveChatToolAuditInvocation(
@@ -166,6 +286,19 @@ export class DeepSeekChatService {
       return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
 
+    if (params.conversationId) {
+      if (!meta?.auth) {
+        return [errCodeEnum.ERR_UNAUTHORIZED, null]
+      }
+      if (!db) {
+        return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
+      }
+      const conv = await findConversationForUser(db, params.conversationId, meta.auth.userId)
+      if (!conv) {
+        return [errCodeEnum.ERR_FORBIDDEN, null]
+      }
+    }
+
     const startedAt = Date.now()
     const auditCtx = resolveChatToolAuditInvocation(meta, 'chat')
     const audit = startChatToolAudit({ requestId: auditCtx.requestId, route: auditCtx.route })
@@ -231,6 +364,12 @@ export class DeepSeekChatService {
           docNamesCount: params.docNames?.length ?? 0,
           thinking: params.thinking === true,
         })
+      }
+
+      if (params.conversationId && meta?.auth && db) {
+        void persistChatCompletion(params, data, meta.auth.userId).catch((e) =>
+          console.warn('[persistChatCompletion]', e)
+        )
       }
 
       return [errCodeEnum.ERR_SUCCESS, data]
@@ -370,6 +509,14 @@ export class DeepSeekChatService {
         docNamesCount: params.docNames?.length ?? 0,
         thinking: params.thinking === true,
       })
+
+      if (params.conversationId && meta?.auth && db) {
+        void persistChatStreamCompletion(
+          params,
+          { text: streamAccumText, thinking: streamAccumThinking },
+          meta.auth.userId
+        ).catch((e) => console.warn('[persistChatStreamCompletion]', e))
+      }
     } catch (err) {
       console.error('[chatStream]', err)
       audit?.streamError(err)

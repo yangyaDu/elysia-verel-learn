@@ -1,4 +1,5 @@
 import { Elysia, t } from 'elysia'
+import { authMiddleware } from '../../middlewares/authMiddleware'
 import { buildResponseBody, createApiResponseType } from '../../utils/msgWrapper'
 import {
   checkStatusResponseSchema,
@@ -12,6 +13,7 @@ import {
 import { documentService } from './service'
 
 export const documentController = new Elysia({ prefix: '/document' })
+  .use(authMiddleware)
   .get(
     '/preview/:s3Key',
     async ({ params }) => {

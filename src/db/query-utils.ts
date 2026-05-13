@@ -1,6 +1,6 @@
 import type { InferInsertModel, InferSelectModel, SQL } from 'drizzle-orm'
 import { and, asc, desc, eq, getTableColumns } from 'drizzle-orm'
-import type { AnyMySqlColumn, MySqlTable } from 'drizzle-orm/mysql-core'
+import type { AnyMySqlColumn, MySqlTable, MySqlUpdateSetSource } from 'drizzle-orm/mysql-core'
 import type { DbClient } from './client'
 
 /** 类型层面：从实体类型中仅保留部分字段（等价于 `Pick`） */
@@ -100,6 +100,41 @@ function buildInsertableSubset<TTable extends MySqlTable>(
     out[key] = value
   }
   return out as Partial<TInsert>
+}
+
+/**
+ * 与 `buildInsertableSubset` 类似，用于 `UPDATE SET`：允许列值为 `sql\`...\`` 等 {@link SQL}（Drizzle `SQLWrapper`）。
+ */
+function buildUpdatePatchSubset<TTable extends MySqlTable>(
+  table: TTable,
+  record: MySqlUpdateSetSource<TTable>
+): MySqlUpdateSetSource<TTable> {
+  type TPatch = MySqlUpdateSetSource<TTable>
+  const cols = getTableColumns(table)
+  const out = {} as Record<string, unknown>
+  for (const key of Object.keys(record) as (keyof TPatch & string)[]) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) {
+      continue
+    }
+    const value = record[key as keyof typeof record]
+    if (value === undefined) {
+      continue
+    }
+    if (!cols[key]) {
+      continue
+    }
+    out[key] = value
+  }
+  return out as TPatch
+}
+
+function readMysqlAffectedRows(result: unknown): number {
+  const header = Array.isArray(result) ? result[0] : result
+  if (header && typeof header === 'object' && 'affectedRows' in header) {
+    const n = (header as { affectedRows: number | bigint }).affectedRows
+    return typeof n === 'bigint' ? Number(n) : Number(n)
+  }
+  return 0
 }
 
 function applyListClauseChain<TTable extends MySqlTable>(
@@ -217,10 +252,10 @@ export async function findManyDynamic<
   return rows as Pick<TEntity, TSelect>[]
 }
 
-/** `updateDynamic` 参数：`filters` 与列表查询相同语义；`patch` 为要更新的列（仅非 `undefined` 的键参与 `SET`） */
+/** `updateDynamic` 参数：`filters` 与列表查询相同语义；`patch` 为 `SET` 子句（列值可为字面量或 `sql\`...\``） */
 export type UpdateDynamicArgs<TTable extends MySqlTable> = {
   filters: Partial<InferSelectModel<TTable>>
-  patch: Partial<InferInsertModel<TTable>>
+  patch: MySqlUpdateSetSource<TTable>
 }
 
 /**
@@ -242,19 +277,23 @@ export async function insertDynamic<TTable extends MySqlTable>(
 /**
  * 动态更新：`WHERE` 由 `filters` 按等值 `AND` 拼接（`undefined` / `null` / `''` 不参与条件，与 `findManyDynamic` 一致）。
  * 若过滤后没有任何 `WHERE` 条件，会抛错，避免误更新全表。
+ *
+ * `patch` 的列值可为字面量，或 Drizzle `sql` 模板（与 `chatRepo.touchConversation` 里 `updatedAt` 的写法一致）。
+ * 返回值为 MySQL `affectedRows`（未识别结果结构时为 `0`）。
  */
 export async function updateDynamic<TTable extends MySqlTable>(
   db: DbClient,
   table: TTable,
   args: UpdateDynamicArgs<TTable>
-): Promise<void> {
+): Promise<number> {
   const whereClause = buildAndFromFilters(table, args.filters)
   if (!whereClause) {
     throw new Error('updateDynamic: filters resolved to no WHERE clause (refusing full-table update)')
   }
-  const setRow = buildInsertableSubset(table, args.patch)
+  const setRow = buildUpdatePatchSubset(table, args.patch)
   if (Object.keys(setRow).length === 0) {
     throw new Error('updateDynamic: patch has no settable columns after filtering undefined / unknown keys')
   }
-  await db.update(table).set(setRow).where(whereClause)
+  const raw = await db.update(table).set(setRow).where(whereClause)
+  return readMysqlAffectedRows(raw)
 }

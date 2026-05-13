@@ -1,4 +1,4 @@
-import type { InferSelectModel, SQL } from 'drizzle-orm'
+import type { InferInsertModel, InferSelectModel, SQL } from 'drizzle-orm'
 import { and, asc, desc, eq, getTableColumns } from 'drizzle-orm'
 import type { AnyMySqlColumn, MySqlTable } from 'drizzle-orm/mysql-core'
 import type { DbClient } from './client'
@@ -73,6 +73,33 @@ function buildAndFromFilters<TTable extends MySqlTable>(
     conditions.push(eq(column, value))
   }
   return conditions.length > 0 ? and(...conditions) : undefined
+}
+
+/**
+ * 从普通对象中筛出「表上真实存在」的列键值对；`undefined` 不写入（插入/更新时交给数据库默认或不改列）。
+ * `null` 会保留，用于显式写入 `NULL` / `SET col = NULL`。
+ */
+function buildInsertableSubset<TTable extends MySqlTable>(
+  table: TTable,
+  record: Partial<InferInsertModel<TTable>>
+): Partial<InferInsertModel<TTable>> {
+  type TInsert = InferInsertModel<TTable>
+  const cols = getTableColumns(table)
+  const out = {} as Record<string, unknown>
+  for (const key of Object.keys(record) as (keyof TInsert & string)[]) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) {
+      continue
+    }
+    const value = record[key as keyof typeof record]
+    if (value === undefined) {
+      continue
+    }
+    if (!cols[key]) {
+      continue
+    }
+    out[key] = value
+  }
+  return out as Partial<TInsert>
 }
 
 function applyListClauseChain<TTable extends MySqlTable>(
@@ -188,4 +215,46 @@ export async function findManyDynamic<
   }
 
   return rows as Pick<TEntity, TSelect>[]
+}
+
+/** `updateDynamic` 参数：`filters` 与列表查询相同语义；`patch` 为要更新的列（仅非 `undefined` 的键参与 `SET`） */
+export type UpdateDynamicArgs<TTable extends MySqlTable> = {
+  filters: Partial<InferSelectModel<TTable>>
+  patch: Partial<InferInsertModel<TTable>>
+}
+
+/**
+ * 动态插入一行：只写入 `values` 里在表上存在且值不为 `undefined` 的列（`null` 会写入 SQL `NULL`）。
+ * 不负责校验「非空且无默认」列是否齐全，由调用方与数据库约束保证。
+ */
+export async function insertDynamic<TTable extends MySqlTable>(
+  db: DbClient,
+  table: TTable,
+  values: Partial<InferInsertModel<TTable>>
+): Promise<void> {
+  const row = buildInsertableSubset(table, values)
+  if (Object.keys(row).length === 0) {
+    throw new Error('insertDynamic: no insertable columns after filtering undefined / unknown keys')
+  }
+  await db.insert(table).values(row as never)
+}
+
+/**
+ * 动态更新：`WHERE` 由 `filters` 按等值 `AND` 拼接（`undefined` / `null` / `''` 不参与条件，与 `findManyDynamic` 一致）。
+ * 若过滤后没有任何 `WHERE` 条件，会抛错，避免误更新全表。
+ */
+export async function updateDynamic<TTable extends MySqlTable>(
+  db: DbClient,
+  table: TTable,
+  args: UpdateDynamicArgs<TTable>
+): Promise<void> {
+  const whereClause = buildAndFromFilters(table, args.filters)
+  if (!whereClause) {
+    throw new Error('updateDynamic: filters resolved to no WHERE clause (refusing full-table update)')
+  }
+  const setRow = buildInsertableSubset(table, args.patch)
+  if (Object.keys(setRow).length === 0) {
+    throw new Error('updateDynamic: patch has no settable columns after filtering undefined / unknown keys')
+  }
+  await db.update(table).set(setRow).where(whereClause)
 }

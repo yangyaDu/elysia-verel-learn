@@ -17,6 +17,7 @@ import {
   CheckStatusResult,
   DocParams,
   DocumentMetadata,
+  DocumentMetadataFields,
   GetPreviewParams,
   ListDocumentsParams,
   UploadDocumentResponse,
@@ -130,7 +131,7 @@ export class DocumentService {
     }
   }
 
-  async getDocument(params: DocParams): Promise<[ErrInfo, DocumentMetadata | null]> {
+  async getDocument(params: DocParams): Promise<[ErrInfo, DocumentMetadata]> {
     const { docId } = params
     const client = getPageIndexClient()
     if (!client) {
@@ -139,7 +140,7 @@ export class DocumentService {
 
     try {
       const response = await client.api.getDocument(docId)
-      const data: DocumentMetadata = {
+      const data: DocumentMetadataFields = {
         id: response.id,
         name: response.name,
         status: response.status ?? '',
@@ -190,7 +191,7 @@ export class DocumentService {
       }
 
       const data = response.map((item) => {
-        const doc: DocumentMetadata = {
+        const doc: DocumentMetadataFields = {
           id: item.id,
           name: item.name,
           status: item.status ?? '',

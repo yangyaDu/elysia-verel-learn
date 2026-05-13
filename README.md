@@ -14,6 +14,15 @@ cd elysia-vercel-learn
 bun install
 ```
 
+从仓库根目录复制 `.env.example` 为 `.env`，填写密钥与连接信息（`DEEPSEEK_*`、`PAGEINDEX_*`、`MINIO_*` 等）。应用与 Docker Compose 均从该文件读取；启动容器时请带上 `--env-file .env`，例如：
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env up -d
+docker compose -f docker/observability/docker-compose.yml --env-file .env up -d
+```
+
+观测栈中的 Grafana 管理员账号密码对应 `.env` 里的 `GRAFANA_ADMIN_USER`、`GRAFANA_ADMIN_PASSWORD`。
+
 ## 本地开发
 
 ### 仅用 Bun（默认）
@@ -22,7 +31,7 @@ bun install
 bun run dev
 ```
 
-与 `bun run dev:bun` 相同。默认监听 `http://localhost:3000`。
+与 `bun run dev:bun` 相同。默认监听 `http://localhost:4011`（避开 3000–4000 常见占用端口，可用 `PORT` 覆盖）。
 
 ### 模拟 Vercel（`vercel dev`）
 

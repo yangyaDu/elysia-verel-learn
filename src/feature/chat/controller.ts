@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Elysia, t } from 'elysia'
 import { errCodeEnum } from '../../define/errDefine'
-import { db } from '../../db/client'
-import { createConversationRow } from './chatRepo'
+import { chatToolAuditRequestMiddleware } from '../../middlewares/chatToolAuditRequestMiddleware'
 import { buildResponseBody, bulidSseResponse, createApiResponseType } from '../../utils/msgWrapper'
 import {
   chatBodySchema,
@@ -30,40 +29,9 @@ export const chatController = new Elysia()
     }
   )
   .post(
-    '/chat/conversations',
-    async ({ body }) => {
-      if (!db) {
-        return buildResponseBody(errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null)
-      }
-      const id = randomUUID()
-      try {
-        await createConversationRow(db, {
-          id,
-          title: body.title,
-          docNames: body.docNames ?? null,
-          modelId: body.modelId ?? null,
-        })
-        return buildResponseBody(errCodeEnum.ERR_SUCCESS, { id })
-      } catch (err) {
-        console.error('[chat/conversations]', err)
-        return buildResponseBody(errCodeEnum.ERR_THIRDPARTY_ERROR, null)
-      }
-    },
-    {
-      body: createConversationBodySchema,
-      response: {
-        200: createApiResponseType(createConversationResponseSchema),
-      },
-      detail: {
-        tags: ['chat'],
-        summary: '创建会话（用于 MySQL 中持久化后续 /chat 与 /chat/stream）',
-      },
-    }
-  )
-  .post(
     '/chat',
-    async ({ body }) => {
-      const [err, data] = await deepSeekChatService.chat(body)
+    async ({ body, request }) => {
+      const [err, data] = await deepSeekChatService.chat(body, { request })
       return buildResponseBody(err, data)
     },
     {
@@ -80,8 +48,8 @@ export const chatController = new Elysia()
   )
   .post(
     '/chat/stream',
-    ({ body }) => {
-      const streamIterable = deepSeekChatService.chatStream(body)
+    ({ body, request }) => {
+      const streamIterable = deepSeekChatService.chatStream(body, { request })
       return bulidSseResponse(streamIterable)
     },
     {
@@ -93,6 +61,21 @@ export const chatController = new Elysia()
         tags: ['chat'],
         description:
           '默认仅 `data:` 正文流；`thinking: true` 时并行发送 `event: thinking` 承载推理增量，结束仍为 `event: done`。',
+      },
+    }
+  )
+  .post(
+    '/echo',
+    ({ body }) => {
+      return buildResponseBody(errCodeEnum.ERR_SUCCESS, body)
+    },
+    {
+      body: echoBodySchema,
+      response: {
+        200: createApiResponseType(echoBodySchema),
+      },
+      detail: {
+        tags: ['echo'],
       },
     }
   )

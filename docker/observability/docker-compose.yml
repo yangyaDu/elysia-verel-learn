@@ -1,0 +1,46 @@
+# 在项目根目录执行：docker compose -f docker/observability/docker-compose.yml --env-file .env up -d
+# Grafana: http://localhost:13080  Explore → 数据源 Loki 已预置（宿主机端口避开 3000–4000）。
+# Loki:    http://localhost:13100
+#
+# 将本机 API 以 Docker 运行且 stdout 为 JSON 行时，Promtail 会通过 docker_sd 采集；
+# 若在宿主机直接 bun dev，可用 file_sd + 将日志 tee 到挂载卷内文件（见 promtail-config.yml 注释）。
+
+services:
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    ports:
+      - '13100:3100'
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: promtail
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    ports:
+      - '13080:3000'
+    environment:
+      # 凭据来自项目根目录 .env（与 `docker compose` 工作目录一致时自动加载）
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS_ENABLED:-true}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - loki
+
+volumes:
+  loki-data: {}

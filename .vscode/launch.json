@@ -1,0 +1,51 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug API (no watch)",
+      "program": "${workspaceFolder}/src/index.ts",
+      "cwd": "${workspaceFolder}",
+      "watchMode": false,
+      "strictEnv": false,
+      "stopOnEntry": false,
+      "env": {
+        "PORT": "4011"
+      }
+    },
+    {
+      "type": "bun",
+      "request": "attach",
+      "name": "Attach to Bun (after bun run dev:debug)",
+      "url": "ws://127.0.0.1:9229/debug",
+      "localRoot": "${workspaceFolder}"
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug API (watch)",
+      "program": "${workspaceFolder}/src/index.ts",
+      "cwd": "${workspaceFolder}",
+      "watchMode": true,
+      "strictEnv": false,
+      "stopOnEntry": false,
+      "env": {
+        "PORT": "4011"
+      }
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Verify debugger (stop on first line)",
+      "program": "${workspaceFolder}/src/index.ts",
+      "cwd": "${workspaceFolder}",
+      "watchMode": false,
+      "strictEnv": false,
+      "stopOnEntry": true,
+      "env": {
+        "PORT": "4011"
+      }
+    }
+  ]
+}

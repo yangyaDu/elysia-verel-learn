@@ -14,7 +14,12 @@ export class EchoBody {
 }
 
 export const chatMessageSchema = t.Object({
-  role: t.Union([t.Literal('system'), t.Literal('user'), t.Literal('assistant'), t.Literal('tool')]),
+  role: t.Union([
+    t.Literal('system'),
+    t.Literal('user'),
+    t.Literal('assistant'),
+    t.Literal('tool'),
+  ]),
   content: t.String(),
   name: t.Optional(t.String()),
   toolCallId: t.Optional(t.String()),
@@ -33,7 +38,13 @@ export const chatBodySchema = t.Object({
   ),
   messages: t.Optional(t.Array(chatMessageSchema)),
   /** 为 true 时在支持「思考/推理」展示的模型上启用（如 DeepSeek thinking 模式）；不支持的模型请忽略或勿传。 */
-  thinking: t.Optional(t.Boolean()),
+  thinking: t.Optional(
+    t.Boolean({
+      default: false,
+      description:
+        '为 true 时在支持「思考/推理」展示的模型上启用（如 DeepSeek thinking 模式）；不支持的模型请忽略或勿传。',
+    })
+  ),
   /**
    * 用户已选定的文档名称列表（PageIndex 文档名）。
    * 传入后 LLM 将直接针对这些文档作答，无需先搜索。

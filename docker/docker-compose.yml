@@ -2,6 +2,7 @@
 # （--env-file 用于 compose 内 ${MYSQL_HOST_PORT}、${DEEPSEEK_API_KEY} 等插值；MySQL 凭证由各服务 env_file 读根目录 .env）
 
 services:
+  # 在项目根目录执行：docker compose -f docker/docker-compose.yml --env-file .env up -d
   minio:
     image: quay.io/minio/minio
     container_name: minio-server
@@ -9,8 +10,9 @@ services:
       - '9000:9000' # API 端口
       - '9001:9001' # 控制台端口
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      # 与业务进程中的 MINIO_ACCESS_KEY / MINIO_SECRET_KEY 保持一致（均从项目根 .env 读取）
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     volumes:
       - ./data:/data # 文件映射地址
     command: server /data --console-address ":9001"
@@ -26,7 +28,7 @@ services:
     ports:
       - "9090:9090"
     environment:
-      - OPENAI_API_BASE=https://api.deepseek.com/v1
+      - OPENAI_API_BASE=${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
       - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
 
     volumes:
@@ -40,38 +42,14 @@ services:
     image: minio/mc
     depends_on:
       - minio
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb myminio/documents;
-      /usr/bin/mc anonymous set public myminio/documents;
-      exit 0;
-      "
-    networks:
-      - app_net
-
-  mysql:
-    image: mysql:8.0
-    container_name: mysql8-pageindex
-    restart: always
-    env_file:
-      - ../.env
-    ports:
-      - "${MYSQL_HOST_PORT:-3306}:3306"
-    volumes:
-      - ./mysql_data:/var/lib/mysql
-    networks:
-      - app_net
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-networks:
-  app_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.28.0.0/16
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        /usr/bin/mc alias set myminio http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
+        /usr/bin/mc mb -p "myminio/$$MINIO_BUCKET_NAME" || true
+        /usr/bin/mc anonymous set public "myminio/$$MINIO_BUCKET_NAME"
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}

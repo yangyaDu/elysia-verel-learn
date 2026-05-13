@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
-    "dev:vercel": "vercel dev --listen 3010",
+    "dev:debug": "bun --inspect=127.0.0.1:9229/debug src/index.ts",
+    "dev:vercel": "vercel dev --listen 8080",
     "dev:bun": "bun run --watch src/index.ts",
     "tsc-check": "tsc --noEmit",
     "lint": "eslint .",

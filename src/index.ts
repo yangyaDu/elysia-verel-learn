@@ -3,9 +3,9 @@ import swagger from '@elysiajs/swagger'
 import { Elysia } from 'elysia'
 import { chatController } from './feature/chat/controller'
 import { documentController } from './feature/document/controller'
-import { errorMiddleware, loggerMiddleware } from './middlewares'
+import { errorMiddleware, loggerMiddleware } from './middlewares/middlewares'
 
-const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:3030')
+const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
@@ -38,7 +38,7 @@ export default app
 
 // 本地可直接 `bun run dev:bun`；Vercel 生产环境仅使用上方的 default export。
 if (import.meta.main) {
-  const port = Number(process.env.PORT) || 3010
+  const port = Number(process.env.PORT) || 4011
   app.listen(port)
   console.info(`Listening on http://localhost:${port}`)
 }

@@ -1,18 +1,23 @@
 import { PageIndexClient } from '@pageindex/sdk'
 
 /**
- * 从环境变量读取 PageIndex 配置。
+ * 从环境变量读取 PageIndex 配置（密钥仅来自 `PAGEINDEX_API_KEY`，无内置默认值）。
  */
 class PageIndexClientSingleton {
   private static instance: PageIndexClient | null | undefined
 
-  static getInstance() {
+  static getInstance(): PageIndexClient | null {
     if (PageIndexClientSingleton.instance !== undefined) {
       return PageIndexClientSingleton.instance
     }
 
-    const apiKey = (process.env.PAGEINDEX_API_KEY || '9499faa2f01e447b91ce0c5d71d2d600').trim()
-    const baseUrl = (process.env.PAGEINDEX_BASE_URL || 'http://localhost:9090').trim()
+    const apiKey = process.env.PAGEINDEX_API_KEY?.trim()
+    const baseUrl = (process.env.PAGEINDEX_BASE_URL?.trim() || 'http://localhost:9090').trim()
+
+    if (!apiKey) {
+      PageIndexClientSingleton.instance = null
+      return null
+    }
 
     PageIndexClientSingleton.instance = new PageIndexClient({
       apiKey,
@@ -22,7 +27,7 @@ class PageIndexClientSingleton {
   }
 }
 
-export function getPageIndexClient() {
+export function getPageIndexClient(): PageIndexClient | null {
   return PageIndexClientSingleton.getInstance()
 }
 
@@ -35,7 +40,7 @@ export function getPageIndexClient() {
 export async function getConnectedPageIndexClient(): Promise<PageIndexClient> {
   const client = getPageIndexClient()
   if (!client) {
-    throw new Error('PageIndex Client not configured (missing PAGEINDEX_API_KEY)')
+    throw new Error('PageIndex Client not configured (set PAGEINDEX_API_KEY in .env)')
   }
   if (!client.isConnected()) {
     await client.connect()

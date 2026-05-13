@@ -13,21 +13,7 @@ import {
 import { deepSeekChatService } from './service'
 
 export const chatController = new Elysia()
-  .post(
-    '/echo',
-    ({ body }) => {
-      return buildResponseBody(errCodeEnum.ERR_SUCCESS, body)
-    },
-    {
-      body: echoBodySchema,
-      response: {
-        200: createApiResponseType(echoBodySchema),
-      },
-      detail: {
-        tags: ['echo'],
-      },
-    }
-  )
+  .use(chatToolAuditRequestMiddleware)
   .post(
     '/chat',
     async ({ body, request }) => {

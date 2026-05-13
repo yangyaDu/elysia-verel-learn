@@ -55,13 +55,17 @@ export const uploadDocumentResponseSchema = t.Object({
   status: t.Optional(t.String({ description: '状态' })),
 })
 
-export type DocumentMetadata = {
+/** 文档元数据对象（列表项、详情成功时的形状） */
+export type DocumentMetadataFields = {
   id: string
   name: string
   status: string
   created_at?: string
   folder_id?: string
-} | null
+}
+
+/** 单条查询结果：无文档时为 null */
+export type DocumentMetadata = DocumentMetadataFields | null
 
 export const documentMetadataSchema = t.Object({
   id: t.String(),

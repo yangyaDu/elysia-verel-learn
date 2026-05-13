@@ -11,6 +11,29 @@ import type {
   ChatToolResult,
   ChatUsage,
 } from './model'
+import { getChatToolAuditRequestScope } from './chatToolAuditRequestContext'
+import { startChatToolAudit, type ChatToolAuditRequestMeta, type ChatToolAuditRoute } from './toolAudit'
+
+/** 可选传入 `request`（由 chat 路由中间件写入审计域）；单测等可继续传 `requestId`。 */
+export type ChatServiceInvokeContext = ChatToolAuditRequestMeta & {
+  request?: Request
+}
+
+function resolveChatToolAuditInvocation(
+  meta: ChatServiceInvokeContext | undefined,
+  defaultRoute: ChatToolAuditRoute
+): { requestId?: string; route: ChatToolAuditRoute } {
+  if (meta?.request) {
+    const scoped = getChatToolAuditRequestScope(meta.request)
+    if (scoped) {
+      return scoped
+    }
+  }
+  if (meta?.requestId !== undefined) {
+    return { requestId: meta.requestId, route: defaultRoute }
+  }
+  return { route: defaultRoute }
+}
 
 type DocSource = { docName: string; docId?: string; pages?: string }
 
@@ -137,11 +160,15 @@ function extractSources(toolName: string, output: unknown, map: Map<string, DocS
 // ---------------------------------------------------------------------------
 
 export class DeepSeekChatService {
-  async chat(params: ChatBody): Promise<[ErrInfo, ChatResult | null]> {
+  async chat(params: ChatBody, meta?: ChatServiceInvokeContext): Promise<[ErrInfo, ChatResult | null]> {
     const configured = getDeepSeekChatModel()
     if (!configured) {
       return [errCodeEnum.ERR_SERVER_INTERNAL_ERROR, null]
     }
+
+    const startedAt = Date.now()
+    const auditCtx = resolveChatToolAuditInvocation(meta, 'chat')
+    const audit = startChatToolAudit({ requestId: auditCtx.requestId, route: auditCtx.route })
 
     const { model, modelId } = configured
 
@@ -154,8 +181,6 @@ export class DeepSeekChatService {
         stopWhen: stepCountIs(5),
         providerOptions: deepseekProviderOptionsForRequest(params.thinking),
       })) as DeepSeekGenerateSnapshot
-
-      console.log('result', JSON.stringify(result, null, 2))
 
       const data: ChatResult = {
         text: result.text,
@@ -187,18 +212,47 @@ export class DeepSeekChatService {
         data.usage = usage
       }
 
+      if (audit) {
+        for (const c of result.toolCalls ?? []) {
+          audit.toolCall(toChatToolCall(c))
+        }
+        for (const r of result.toolResults ?? []) {
+          audit.toolResult(toChatToolResult(r))
+        }
+        for (const e of result.toolErrors ?? []) {
+          audit.toolError(toChatToolError(e))
+        }
+        audit.chatComplete({
+          durationMs: Date.now() - startedAt,
+          toolCallCount: result.toolCalls?.length ?? 0,
+          toolResultCount: result.toolResults?.length ?? 0,
+          toolErrorCount: result.toolErrors?.length ?? 0,
+          usage: data.usage,
+          docNamesCount: params.docNames?.length ?? 0,
+          thinking: params.thinking === true,
+        })
+      }
+
       return [errCodeEnum.ERR_SUCCESS, data]
     } catch (err) {
       console.error('[chat]', err)
+      audit?.chatError(err)
       return [errCodeEnum.ERR_THIRDPARTY_ERROR, null]
     }
   }
 
-  async *chatStream(params: ChatBody): AsyncGenerator<ChatSseChunk, void, unknown> {
+  async *chatStream(
+    params: ChatBody,
+    meta?: ChatServiceInvokeContext
+  ): AsyncGenerator<ChatSseChunk, void, unknown> {
     const configured = getDeepSeekChatModel()
     if (!configured) {
       return
     }
+
+    const startedAt = Date.now()
+    const auditCtx = resolveChatToolAuditInvocation(meta, 'chat/stream')
+    const audit = startChatToolAudit({ requestId: auditCtx.requestId, route: auditCtx.route })
 
     const { model } = configured
     const sourcesMap = new Map<string, DocSource>()
@@ -257,6 +311,7 @@ export class DeepSeekChatService {
             yield chunk
           }
         } else if (part.type === 'tool-call') {
+          audit?.toolCall(toChatToolCall(part))
           if (params.includeToolEvents === true) {
             const chunk: ChatSseChunk = { part: 'tool-call', data: toChatToolCall(part) }
             if (bufferStep) {
@@ -273,6 +328,7 @@ export class DeepSeekChatService {
             input: unknown
           }
           extractSources(p.toolName, p.output, sourcesMap)
+          audit?.toolResult(toChatToolResult(part))
           if (params.includeToolEvents === true) {
             const chunk: ChatSseChunk = { part: 'tool-result', data: toChatToolResult(part) }
             if (bufferStep) {
@@ -282,6 +338,7 @@ export class DeepSeekChatService {
             }
           }
         } else if (part.type === 'tool-error') {
+          audit?.toolError(toChatToolError(part))
           if (params.includeToolEvents === true) {
             const chunk: ChatSseChunk = { part: 'tool-error', data: toChatToolError(part) }
             if (bufferStep) {
@@ -302,8 +359,16 @@ export class DeepSeekChatService {
       if (sourcesMap.size > 0) {
         yield { part: 'sources', data: [...sourcesMap.values()] }
       }
+
+      audit?.streamEnd({
+        durationMs: Date.now() - startedAt,
+        sourceCount: sourcesMap.size,
+        docNamesCount: params.docNames?.length ?? 0,
+        thinking: params.thinking === true,
+      })
     } catch (err) {
       console.error('[chatStream]', err)
+      audit?.streamError(err)
     }
   }
 }

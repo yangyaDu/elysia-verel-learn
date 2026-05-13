@@ -1,0 +1,30 @@
+# Promtail → Loki：采集本机 Docker 容器 stdout（需挂载 /var/run/docker.sock）。
+# Windows Docker Desktop：一般在 WSL2 或 Linux 引擎下使用本 compose；路径与权限见 Docker 文档。
+#
+# 应用侧：ACCESS_LOG_PLG_JSON=1（默认）且 CHAT_TOOL_AUDIT=on 时，stdout 每行为一条 JSON，
+# Grafana Explore 示例：{service="elysia-api"} | json | line_format "{{.method}} {{.path}} {{.status}} {{.durationMs}}ms"
+# 工具审计：| json | schema="chat_tool_audit.v1"
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/promtail-positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+    relabel_configs:
+      - source_labels: [__meta_docker_container_name]
+        target_label: container_name
+      # 仅采集名称匹配的容器（按需改成你的 API 容器名，或注释掉整段以采集全部）
+      # - source_labels: [__meta_docker_container_name]
+      #   regex: .*(pageindex-api|your-api-container).*
+      #   action: keep
+    pipeline_stages:
+      - docker: {}

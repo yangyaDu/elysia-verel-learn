@@ -1,5 +1,5 @@
-import type { ChatToolCall, ChatToolError, ChatToolResult } from './model'
 import { plgJsonLog } from '../../utils/plgLog'
+import type { ChatToolCall, ChatToolError, ChatToolResult } from './model'
 
 export type ChatToolAuditRoute = 'chat' | 'chat/stream'
 
@@ -108,7 +108,7 @@ function emitRecord(base: Omit<ChatToolAuditRecord, 'schema' | 'ts'>): void {
     ts: new Date().toISOString(),
     ...base,
   }
-  plgJsonLog(record as unknown as Record<string, unknown>)
+  plgJsonLog(record)
 }
 
 export interface ChatToolAuditSession {

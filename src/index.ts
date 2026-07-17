@@ -3,6 +3,7 @@ import swagger from '@elysiajs/swagger'
 import { Elysia } from 'elysia'
 import { chatController } from './feature/chat/controller'
 import { documentController } from './feature/document/controller'
+import { pokerController } from './feature/poker/controller'
 import { errorMiddleware, loggerMiddleware } from './middlewares/middlewares'
 
 const allowOrigins = (process.env.CORS_ALLOW_ORIGINS ?? 'http://localhost:5173')
@@ -21,6 +22,7 @@ const app = new Elysia()
   )
   .use(chatController)
   .use(documentController)
+  .use(pokerController)
 
 app.use(
   swagger({

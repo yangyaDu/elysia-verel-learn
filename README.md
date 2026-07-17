@@ -70,6 +70,34 @@ bun run format:check
 bun run format
 ```
 
+## 扑克查询引擎对比（仅本地 / 长驻 Bun 服务）
+
+`/poker/query-hand-strategy` 根据 `PROTO_POKER_RANGE_ENGINE`（`node-api`、`ffi` 或 `sqlite`）选择一套查询实现。`sqlite` 通过 Drizzle 只读查询源 `range.db`，用于基线对比而非线上运行时。`/poker/compare` 仅在 `POKER_COMPARE_ENABLED=1` 时可用，会在同一请求中依次测量三套实现；不要将它对外暴露。
+
+其余 SDK 查询统一使用 `POST /poker/operation/:operation`：`getConcreteLines`、`getAbstractLines`、`handsByActions`、`queryBatch`、`prewarm` 和 `stats`。请求体与同名 SDK 方法一致，`stats` 的请求体为 `{}`。
+
+本地比较前，先在同级 `proto-poker-range` 仓库构建原生库，并准备一个独立的 Proto V3 数据目录：
+
+```bash
+cd ../proto-poker-range
+cargo build --locked --release -p proto-poker-range-node -p proto-poker-range-ffi
+cp target/release/libproto_poker_range_node.dylib crates/node/index.node # macOS
+```
+
+随后在本项目配置绝对路径：
+
+```bash
+export PROTO_POKER_RANGE_DATA_DIR=/path/to/proto-v3-release-root
+export PROTO_POKER_RANGE_NODE_API_MODULE="$PWD/../proto-poker-range/crates/node/index.js"
+export PROTO_POKER_RANGE_FFI_MODULE="$PWD/../proto-poker-range/crates/bun-ffi/index.ts"
+export PROTO_POKER_RANGE_FFI_LIBRARY="$PWD/../proto-poker-range/target/release/libproto_poker_range_ffi.dylib"
+export PROTO_POKER_RANGE_SQLITE_DB="$PWD/../proto-poker-range/range-data/sqlite/range.db"
+export PROTO_POKER_RANGE_ENGINE=node-api
+export POKER_COMPARE_ENABLED=1
+```
+
+Linux 部署时分别使用 `libproto_poker_range_node.so` 与 `libproto_poker_range_ffi.so`。Vercel 函数不适合作为外部 V3 数据目录的长期宿主；请在长驻 Bun 进程或容器中运行该功能。
+
 ## 路由示例
 
 | 方法 | 路径    | 说明                                      |

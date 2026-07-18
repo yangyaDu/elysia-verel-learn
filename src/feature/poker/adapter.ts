@@ -61,9 +61,8 @@ let nodeApiEnginePromise: Promise<PokerEngine> | undefined
 
 export function getNodeApiPokerEngine(): Promise<PokerEngine> {
   nodeApiEnginePromise ??= (async () => {
-    const modulePath = requiredEnv('PROTO_POKER_RANGE_NODE_API_MODULE')
     const dataDir = requiredEnv('PROTO_POKER_RANGE_DATA_DIR')
-    const nativeModule = await importFromPath<NodeApiModule>(modulePath)
+    const nativeModule = (await import('@proto-poker-range/bun-node-api')) as NodeApiModule
     const store = new nativeModule.PokerHandsRange({ dataDir, maxOpenHandles: 2 })
     return store
   })()

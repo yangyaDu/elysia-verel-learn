@@ -81,14 +81,19 @@ bun run format
 ```bash
 cd ../proto-poker-range
 cargo build --locked --release -p proto-poker-range-node -p proto-poker-range-ffi
-cp target/release/libproto_poker_range_node.dylib crates/node/index.node # macOS
+node scripts/prepare-elysia-node-api-bundle.mjs \
+  ../elysia-verel-learn/vendor/proto-poker-range-bun-node-api \
+  target/release/libproto_poker_range_node.dylib # macOS
+cd ../elysia-verel-learn
+bun install
 ```
 
-随后在本项目配置绝对路径：
+Node-API 已作为本项目私有本地依赖 `@proto-poker-range/bun-node-api` 引入，运行时不再读取同级仓库的 SDK 源码路径。每次更新原生库或切换部署平台后，都需重新生成该包并执行 `bun install`。
+
+随后在本项目配置数据和 FFI 的绝对路径：
 
 ```bash
 export PROTO_POKER_RANGE_DATA_DIR=/path/to/proto-v3-release-root
-export PROTO_POKER_RANGE_NODE_API_MODULE="$PWD/../proto-poker-range/crates/node/index.js"
 export PROTO_POKER_RANGE_FFI_MODULE="$PWD/../proto-poker-range/crates/bun-ffi/index.ts"
 export PROTO_POKER_RANGE_FFI_LIBRARY="$PWD/../proto-poker-range/target/release/libproto_poker_range_ffi.dylib"
 export PROTO_POKER_RANGE_SQLITE_DB="$PWD/../proto-poker-range/range-data/sqlite/range.db"
@@ -96,7 +101,7 @@ export PROTO_POKER_RANGE_ENGINE=node-api
 export POKER_COMPARE_ENABLED=1
 ```
 
-Linux 部署时分别使用 `libproto_poker_range_node.so` 与 `libproto_poker_range_ffi.so`。Vercel 函数不适合作为外部 V3 数据目录的长期宿主；请在长驻 Bun 进程或容器中运行该功能。
+Linux 部署时，使用 `libproto_poker_range_node.so` 重新生成本地 Node-API 包，并使用 `libproto_poker_range_ffi.so` 作为 FFI 库。Node-API 的 `.node` 二进制必须与实际运行的平台和 CPU 架构一致。Vercel 函数不适合作为外部 V3 数据目录的长期宿主；请在长驻 Bun 进程或容器中运行该功能。
 
 ## 路由示例
 

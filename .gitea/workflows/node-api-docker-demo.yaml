@@ -20,8 +20,18 @@ jobs:
           ZENITHSTRAT_NPM_READ_TOKEN: ${{ secrets.ZENITHSTRAT_NPM_READ_TOKEN }}
         run: |
           test -n "$ZENITHSTRAT_NPM_READ_TOKEN"
-          echo "//10.10.1.100:3000/api/packages/ZenithStrat/npm/:_authToken=$ZENITHSTRAT_NPM_READ_TOKEN" > "$RUNNER_TEMP/zenithstrat.npmrc"
+          printf '%s\n' \
+            '@zenithstrat:registry=http://10.10.1.100:3000/api/packages/ZenithStrat/npm/' \
+            "//10.10.1.100:3000/api/packages/ZenithStrat/npm/:_authToken=$ZENITHSTRAT_NPM_READ_TOKEN" \
+            > "$RUNNER_TEMP/zenithstrat.npmrc"
           echo "path=$RUNNER_TEMP/zenithstrat.npmrc" >> "$GITHUB_OUTPUT"
+
+      - name: Verify private npm access
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ steps.private_npmrc.outputs.path }}
+        run: |
+          npm view @zenithstrat/proto-poker-range-bun-node-api@0.1.0 version \
+            --registry http://10.10.1.100:3000/api/packages/ZenithStrat/npm/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

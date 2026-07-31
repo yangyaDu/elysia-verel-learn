@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1.7
+# Build-only validation for the private Proto Poker Range Node-API package.
+FROM oven/bun:1.3.14-slim AS builder
+
+WORKDIR /app
+
+COPY package.json bun.lock .npmrc ./
+RUN --mount=type=secret,id=zenithstrat_npmrc,target=/tmp/.npmrc \
+    NPM_CONFIG_USERCONFIG=/tmp/.npmrc bun install --frozen-lockfile
+
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+# This imports the Linux native .node file inside the container.
+RUN bun run verify:proto-node-api
+
+RUN bun run tsc-check
+
+FROM oven/bun:1.3.14-slim AS runtime
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY package.json ./
+COPY src/ ./src/
+
+USER bun
+CMD ["bun", "src/index.ts"]

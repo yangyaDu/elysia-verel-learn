@@ -1,0 +1,38 @@
+name: Verify private Node-API Docker build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Prepare private npm configuration
+        id: private_npmrc
+        env:
+          ZENITHSTRAT_NPM_READ_TOKEN: ${{ secrets.ZENITHSTRAT_NPM_READ_TOKEN }}
+        run: |
+          test -n "$ZENITHSTRAT_NPM_READ_TOKEN"
+          echo "//10.10.1.100:3000/api/packages/ZenithStrat/npm/:_authToken=$ZENITHSTRAT_NPM_READ_TOKEN" > "$RUNNER_TEMP/zenithstrat.npmrc"
+          echo "path=$RUNNER_TEMP/zenithstrat.npmrc" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and load the Node-API demo image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.node-api-demo
+          load: true
+          push: false
+          tags: elysia-node-api-demo:ci
+          secret-files: |
+            zenithstrat_npmrc=${{ steps.private_npmrc.outputs.path }}

@@ -21,15 +21,8 @@ jobs:
         run: |
           test -n "$ZENITHSTRAT_NPM_READ_TOKEN"
           printf '%s\n' "$ZENITHSTRAT_NPM_READ_TOKEN" \
-            > "$RUNNER_TEMP/zenithstrat.npmrc"
-          echo "path=$RUNNER_TEMP/zenithstrat.npmrc" >> "$GITHUB_OUTPUT"
-
-      - name: Verify private npm access
-        env:
-          NPM_CONFIG_USERCONFIG: ${{ steps.private_npmrc.outputs.path }}
-        run: |
-          npm view @zenithstrat/proto-poker-range-bun-node-api@0.1.0 version \
-            --registry http://10.10.1.100:3000/api/packages/ZenithStrat/npm/
+            > "$RUNNER_TEMP/npmrc"
+          echo "path=$RUNNER_TEMP/npmrc" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -43,4 +36,4 @@ jobs:
           push: false
           tags: elysia-node-api-demo:ci
           secret-files: |
-            zenithstrat_npmrc=${{ steps.private_npmrc.outputs.path }}
+            npmrc=${{ steps.private_npmrc.outputs.path }}

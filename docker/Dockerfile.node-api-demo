@@ -5,8 +5,8 @@ FROM oven/bun:1.3.14-slim AS builder
 WORKDIR /app
 
 COPY package.json bun.lock .npmrc ./
-RUN --mount=type=secret,id=zenithstrat_npmrc,target=/tmp/.npmrc \
-    NPM_CONFIG_USERCONFIG=/tmp/.npmrc bun install --frozen-lockfile
+RUN --mount=type=secret,id=zenithstrat_npmrc,target=/root/.npmrc \
+    bun install --frozen-lockfile
 
 COPY tsconfig.json ./
 COPY src/ ./src/

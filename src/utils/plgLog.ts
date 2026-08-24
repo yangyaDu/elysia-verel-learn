@@ -7,7 +7,7 @@ const service = (process.env.LOG_SERVICE_NAME ?? 'elysia-api').trim() || 'elysia
 export type PlgLogLevel = 'info' | 'warn' | 'error'
 
 export function plgJsonLog(record: Record<string, unknown>, level: PlgLogLevel = 'info'): void {
-  const line = JSON.stringify({ ...record, service, level })
+  const line = JSON.stringify({ ...record, service, level },null, 2)
   if (level === 'error') {
     console.error(line)
   } else if (level === 'warn') {

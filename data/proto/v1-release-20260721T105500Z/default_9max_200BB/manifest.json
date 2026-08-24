@@ -1,0 +1,85 @@
+{
+  "format": "POKER_HANDS_PROTO_V1",
+  "version": 1,
+  "payloadSchema": "poker.hands.storage.v1",
+  "strategy": "default",
+  "playerCount": 9,
+  "depthBb": 200,
+  "handEncoding": "HAND_ENCODING_PREFLOP",
+  "complete": true,
+  "drillScenarios": {
+    "data": {
+      "fileName": "drill-scenarios.pb",
+      "sizeBytes": 63085,
+      "crc32c": 2129635802,
+      "primaryCount": 1,
+      "secondaryCount": 608
+    },
+    "index": {
+      "fileName": "drill-scenarios.idx",
+      "sizeBytes": 14704,
+      "crc32c": 2949617359,
+      "primaryCount": 1,
+      "secondaryCount": 608
+    },
+    "pageCount": 1,
+    "actionLineCount": 608,
+    "drillCount": 9,
+    "hashRecordCount": 608
+  },
+  "abstractActionPaths": {
+    "data": {
+      "fileName": "abstract-action-paths.pb",
+      "sizeBytes": 8420718,
+      "crc32c": 1498004870,
+      "primaryCount": 132,
+      "secondaryCount": 4220
+    },
+    "index": {
+      "fileName": "abstract-action-paths.idx",
+      "sizeBytes": 103488,
+      "crc32c": 881877559,
+      "primaryCount": 132,
+      "secondaryCount": 4220
+    },
+    "pageCount": 132,
+    "abstractPathCount": 4220,
+    "concretePathCount": 203028,
+    "abstractHashRecordCount": 4220
+  },
+  "concreteActionPaths": {
+    "data": {
+      "fileName": "concrete-action-paths.pb",
+      "sizeBytes": 12832315,
+      "crc32c": 3336901587,
+      "primaryCount": 203028,
+      "secondaryCount": 0
+    },
+    "index": {
+      "fileName": "concrete-action-paths.idx",
+      "sizeBytes": 4872736,
+      "crc32c": 1791940871,
+      "primaryCount": 203028,
+      "secondaryCount": 203028
+    },
+    "recordCount": 203028,
+    "hashRecordCount": 203028
+  },
+  "handStrategies": {
+    "data": {
+      "fileName": "hand-strategies.pb",
+      "sizeBytes": 54794828,
+      "crc32c": 1128621584,
+      "primaryCount": 203028,
+      "secondaryCount": 0
+    },
+    "index": {
+      "fileName": "hand-strategies.idx",
+      "sizeBytes": 3248512,
+      "crc32c": 3427477643,
+      "primaryCount": 203028,
+      "secondaryCount": 0
+    },
+    "recordCount": 203028
+  }
+}

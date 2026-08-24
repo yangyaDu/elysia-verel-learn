@@ -117,14 +117,14 @@ export interface QueryBatchResponse {
   results: Array<QueryBatchItemResponse>
 }
 
-export interface PokerHandsRangeOptions {
+export interface ProtoHandRangeOptions {
   dataDir: string
   maxOpenHandles?: number
   verifyChecksums?: boolean
 }
 
-export declare class PokerHandsRange {
-  constructor(options: PokerHandsRangeOptions)
+export declare class ProtoHandRange {
+  constructor(options: ProtoHandRangeOptions)
   getConcreteLines(request: ConcreteLinesRequest): ConcreteLinesData
   getAbstractLines(request: AbstractLinesRequest): AbstractLinesData
   handsByActions(request: HandsByActionsRequest): HandsByActionsResponse

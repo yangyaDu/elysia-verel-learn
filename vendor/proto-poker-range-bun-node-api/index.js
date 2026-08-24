@@ -80,7 +80,7 @@ function callNative(fn) {
   }
 }
 
-export class PokerHandsRange {
+export class ProtoHandRange {
   #native;
 
   constructor(options) {

@@ -20,6 +20,8 @@ const errCodeEnum = {
 
   // 参数错误
   ERR_PARAMS_ERROR: { code: 1000, message: 'validation error' },
+  // 场景无法转换为可执行 Drill
+  ERR_SCENE_DRILL_NOT_FOUND: { code: 1601, message: 'scene drill not found' },
 
   // 认证业务错误 (1100-1199)
   ERR_AUTH_EMAIL_EXISTS: { code: 1101, message: 'email already registered' },
@@ -154,4 +156,3 @@ export class BusinessError extends Error {
 }
 
 export { errCodeEnum, getErrInfoFromCode, getErrInfoFromKey }
-

@@ -7,10 +7,33 @@ import {
   pokerCompareResponseSchema,
   pokerQueryBodySchema,
   pokerQueryResponseSchema,
+  sceneAggregateOptionSchema,
+  sceneDrillRecommendationSchema,
 } from './model'
+import { convertSceneAggregateOption } from './sceneDrill'
 import { pokerService } from './service'
 
 export const pokerController = new Elysia({ prefix: '/poker' })
+  .post(
+    '/scene-to-drill',
+    async ({ body, set }) => {
+      const [err, data] = await convertSceneAggregateOption(body)
+      if (err === errCodeEnum.ERR_PARAMS_ERROR.code) {
+        set.status = 400
+      }
+      return buildResponseBody(err, data)
+    },
+    {
+      body: sceneAggregateOptionSchema,
+      response: {
+        200: createApiResponseType(sceneDrillRecommendationSchema),
+      },
+      detail: {
+        tags: ['poker'],
+        summary: '将场景聚合条件转换为 Drill 推荐',
+      },
+    }
+  )
   .post(
     '/query-hand-strategy',
     async ({ body }) => {

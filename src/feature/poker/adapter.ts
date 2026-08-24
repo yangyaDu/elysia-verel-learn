@@ -25,14 +25,64 @@ type NodeApiStore = {
   [operation in PokerOperation]: (request?: unknown) => unknown
 }
 
+export type SceneDimensionType =
+  | 'STREET'
+  | 'SPOT_TYPE'
+  | 'PLAYERS_IN_POT'
+  | 'HERO_POSITION'
+  | 'OPPONENT_POSITION'
+  | 'POT_FAMILY'
+  | 'HERO_INITIATIVE'
+  | 'POSITION_RELATION'
+
+export type SceneDimensionValue =
+  | { street: 'PREFLOP' | 'FLOP' | 'TURN' | 'RIVER' }
+  | {
+      spotType:
+        | 'preflop_rfi'
+        | 'preflop_vs_limp'
+        | 'preflop_vs_raise'
+        | 'preflop_vs_threebet'
+        | 'preflop_vs_fourbet'
+        | 'postflop_fta'
+        | 'postflop_vs_check'
+        | 'postflop_vs_bet'
+        | 'postflop_vs_raise'
+    }
+  | { playersInPot: number }
+  | { position: { seatOffsetFromButton: number } }
+  | { potFamily: 'LIMPED' | 'SRP' | '3BP' | '4BP_PLUS' }
+  | { heroInitiative: 'AGGRESSOR' | 'CALLER_OR_CHECKER' }
+  | { positionRelation: 'IP' | 'OOP' | 'SANDWICHED' }
+
+export type SceneDimensionFilter = {
+  dimensionType: SceneDimensionType
+  values: readonly SceneDimensionValue[]
+}
+
+export type SceneLineMatchResult = {
+  actionLines: Array<{ drillName: string; abstractLine: string[] }>
+  matchedDimensions: SceneDimensionType[]
+  ignoredDimensions: SceneDimensionType[]
+}
+
+export type NodeApiSceneStore = NodeApiStore & {
+  getAbstractLinesByDimensionFilters: (request: {
+    strategy?: string
+    playerCount: number
+    depthBb: number
+    filters: readonly SceneDimensionFilter[]
+  }) => SceneLineMatchResult | null
+}
+
 type NodeApiModule = {
-  ProtoHandRange: new (options: { dataDir: string; maxOpenHandles?: number }) => NodeApiStore
+  PokerHandsRange: new (options: { dataDir: string; maxOpenHandles?: number }) => NodeApiStore
 }
 
 type FfiStore = NodeApiStore
 
 type FfiModule = {
-  PokerHandsRangeFfi: new (options: {
+  ProtoHandRangeFfi: new (options: {
     libraryPath: string
     dataDir: string
     maxOpenHandles?: number
@@ -44,6 +94,9 @@ export type PokerEngineName = 'node-api' | 'ffi' | 'sqlite'
 export type PokerEngine = {
   [operation in PokerOperation]: (request?: unknown) => unknown
 }
+
+export type NodeApiPokerEngine = PokerEngine &
+  Pick<NodeApiSceneStore, 'getAbstractLinesByDimensionFilters'>
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim()
@@ -57,14 +110,13 @@ async function importFromPath<T>(modulePath: string): Promise<T> {
   return (await import(pathToFileURL(modulePath).href)) as T
 }
 
-let nodeApiEnginePromise: Promise<PokerEngine> | undefined
+let nodeApiEnginePromise: Promise<NodeApiPokerEngine> | undefined
 
-export function getNodeApiPokerEngine(): Promise<PokerEngine> {
+export function getNodeApiPokerEngine(): Promise<NodeApiPokerEngine> {
   nodeApiEnginePromise ??= (async () => {
     const dataDir = requiredEnv('PROTO_POKER_RANGE_DATA_DIR')
-    const nativeModule =
-      (await import('@zenithstrat/proto-poker-range-bun-node-api')) as NodeApiModule
-    const store = new nativeModule.ProtoHandRange({ dataDir, maxOpenHandles: 2 })
+    const nativeModule = (await import('@proto-poker-range/bun-node-api')) as NodeApiModule
+    const store = new nativeModule.PokerHandsRange({ dataDir, maxOpenHandles: 2 })
     return store
   })()
   return nodeApiEnginePromise
@@ -78,7 +130,7 @@ export function getFfiPokerEngine(): Promise<PokerEngine> {
     const dataDir = requiredEnv('PROTO_POKER_RANGE_DATA_DIR')
     const libraryPath = requiredEnv('PROTO_POKER_RANGE_FFI_LIBRARY')
     const ffiModule = await importFromPath<FfiModule>(modulePath)
-    const store = new ffiModule.PokerHandsRangeFfi({
+    const store = new ffiModule.ProtoHandRangeFfi({
       libraryPath,
       dataDir,
       maxOpenHandles: 2,

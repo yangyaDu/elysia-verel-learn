@@ -1,0 +1,85 @@
+{
+  "format": "POKER_HANDS_PROTO_V1",
+  "version": 1,
+  "payloadSchema": "poker.hands.storage.v1",
+  "strategy": "default",
+  "playerCount": 8,
+  "depthBb": 200,
+  "handEncoding": "HAND_ENCODING_PREFLOP",
+  "complete": true,
+  "drillScenarios": {
+    "data": {
+      "fileName": "drill-scenarios.pb",
+      "sizeBytes": 9509,
+      "crc32c": 4065727285,
+      "primaryCount": 1,
+      "secondaryCount": 335
+    },
+    "index": {
+      "fileName": "drill-scenarios.idx",
+      "sizeBytes": 8152,
+      "crc32c": 208588805,
+      "primaryCount": 1,
+      "secondaryCount": 335
+    },
+    "pageCount": 1,
+    "actionLineCount": 335,
+    "drillCount": 9,
+    "hashRecordCount": 335
+  },
+  "abstractActionPaths": {
+    "data": {
+      "fileName": "abstract-action-paths.pb",
+      "sizeBytes": 292967,
+      "crc32c": 3951683382,
+      "primaryCount": 5,
+      "secondaryCount": 1083
+    },
+    "index": {
+      "fileName": "abstract-action-paths.idx",
+      "sizeBytes": 26168,
+      "crc32c": 959305936,
+      "primaryCount": 5,
+      "secondaryCount": 1083
+    },
+    "pageCount": 5,
+    "abstractPathCount": 1083,
+    "concretePathCount": 5454,
+    "abstractHashRecordCount": 1083
+  },
+  "concreteActionPaths": {
+    "data": {
+      "fileName": "concrete-action-paths.pb",
+      "sizeBytes": 291257,
+      "crc32c": 3866190889,
+      "primaryCount": 5454,
+      "secondaryCount": 0
+    },
+    "index": {
+      "fileName": "concrete-action-paths.idx",
+      "sizeBytes": 130960,
+      "crc32c": 1858395353,
+      "primaryCount": 5454,
+      "secondaryCount": 5454
+    },
+    "recordCount": 5454,
+    "hashRecordCount": 5454
+  },
+  "handStrategies": {
+    "data": {
+      "fileName": "hand-strategies.pb",
+      "sizeBytes": 1292239,
+      "crc32c": 2758694733,
+      "primaryCount": 5454,
+      "secondaryCount": 0
+    },
+    "index": {
+      "fileName": "hand-strategies.idx",
+      "sizeBytes": 87328,
+      "crc32c": 382406776,
+      "primaryCount": 5454,
+      "secondaryCount": 0
+    },
+    "recordCount": 5454
+  }
+}

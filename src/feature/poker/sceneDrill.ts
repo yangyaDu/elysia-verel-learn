@@ -192,24 +192,18 @@ function recommendationFromMatches(
   strategy: string,
   playerCount: number,
   depthBb: number,
-  actionLines: Array<{ drillName: string; abstractLine: string[] }>
+  actionLines: string[]
 ): SceneDrillRecommendation {
-  const drillNames = actionLines.map(({ drillName }) => drillName)
-  const uniqueDrillNames = [...new Set(drillNames)]
-  const lineCount = actionLines.reduce((total, item) => total + item.abstractLine.length, 0)
+  const uniqueActionLines = [...new Set(actionLines)]
   return {
-    drillTitle: `场景 Drill：${uniqueDrillNames.join('、')}`,
-    drillDescription: `匹配到 ${uniqueDrillNames.length} 个 Drill、${lineCount} 条抽象行动线。`,
+    drillTitle: '场景抽象行动线',
+    drillDescription: `匹配到 ${uniqueActionLines.length} 条抽象行动线。`,
     config: {
       strategy,
       playerCount,
       depthBb,
       street: option.street,
-      drillNames: uniqueDrillNames,
-      actionLines: actionLines.map(({ drillName, abstractLine }) => ({
-        drillName,
-        abstractLines: abstractLine,
-      })),
+      actionLines: uniqueActionLines,
       holeCards: option.hole_cards,
     },
   }

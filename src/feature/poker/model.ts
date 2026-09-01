@@ -106,11 +106,6 @@ export const sceneAggregateOptionSchema = t.Object(
 
 export type SceneAggregateOption = typeof sceneAggregateOptionSchema.static
 
-const sceneActionLineSchema = t.Object({
-  drillName: t.String(),
-  abstractLines: t.Array(t.String()),
-})
-
 export const sceneDrillRecommendationSchema = t.Object({
   drillTitle: t.String(),
   drillDescription: t.String(),
@@ -119,8 +114,7 @@ export const sceneDrillRecommendationSchema = t.Object({
     playerCount: t.Integer(),
     depthBb: t.Integer(),
     street: t.String(),
-    drillNames: t.Array(t.String()),
-    actionLines: t.Array(sceneActionLineSchema),
+    actionLines: t.Array(t.String()),
     holeCards: t.Optional(t.Array(t.String())),
   }),
 })

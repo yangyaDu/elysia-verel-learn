@@ -137,11 +137,33 @@ export const loggerMiddleware = new Elysia({ name: 'logger' })
   })
   .as('global')
 
-export const errorMiddleware = new Elysia({ name: 'error-handler' }).onError(
-  ({ code, error, set, request, path }) => {
+export const errorMiddleware = new Elysia({ name: 'error-handler' })
+  .onError(({ code, error, set, request, path }) => {
     // eslint-disable-next-line @typescript-eslint/no-base-to-string
     const errorMessage = error instanceof Error ? error.message : String(error)
     const requestId = request.headers.get('x-request-id') ?? undefined
+
+    if (code === 'VALIDATION') {
+      if (ACCESS_LOG_PLG_JSON) {
+        plgJsonLog(
+          {
+            schema: 'http_error.v1',
+            ts: new Date().toISOString(),
+            kind: 'validation',
+            requestId,
+            path,
+            method: request.method,
+            elysiaCode: code,
+          },
+          'warn'
+        )
+      } else {
+        console.warn(`[Validation Error] ${request.method} ${path}`)
+      }
+
+      set.status = 400
+      return buildResponseBody(errCodeEnum.ERR_PARAMS_ERROR.code, null)
+    }
 
     if (error instanceof BusinessError) {
       // 业务逻辑错误，不打印完整的堆栈信息，仅记录关键信息
@@ -196,9 +218,6 @@ export const errorMiddleware = new Elysia({ name: 'error-handler' }).onError(
     console.error(`[Global Error] code: ${code}, message: ${errorMessage}`, error)
 
     switch (code) {
-      case 'VALIDATION':
-        set.status = 400
-        return buildResponseBody(errCodeEnum.ERR_PARAMS_ERROR.code, null)
       case 'NOT_FOUND':
         set.status = 404
         return buildResponseBody(errCodeEnum.ERR_NOT_FOUND.code, null)
@@ -206,5 +225,5 @@ export const errorMiddleware = new Elysia({ name: 'error-handler' }).onError(
         set.status = 500
         return buildResponseBody(errCodeEnum.ERR_SERVER_INTERNAL_ERROR.code, null)
     }
-  }
-)
+  })
+  .as('global')

@@ -61,7 +61,7 @@ export type SceneDimensionFilter = {
 }
 
 export type SceneLineMatchResult = {
-  actionLines: Array<{ drillName: string; abstractLine: string[] }>
+  actionLines: string[]
   matchedDimensions: SceneDimensionType[]
   ignoredDimensions: SceneDimensionType[]
 }
@@ -76,7 +76,7 @@ export type NodeApiSceneStore = NodeApiStore & {
 }
 
 type NodeApiModule = {
-  PokerHandsRange: new (options: { dataDir: string; maxOpenHandles?: number }) => NodeApiStore
+  ProtoHandRange: new (options: { dataDir: string; maxOpenHandles?: number }) => NodeApiSceneStore
 }
 
 type FfiStore = NodeApiStore
@@ -115,8 +115,9 @@ let nodeApiEnginePromise: Promise<NodeApiPokerEngine> | undefined
 export function getNodeApiPokerEngine(): Promise<NodeApiPokerEngine> {
   nodeApiEnginePromise ??= (async () => {
     const dataDir = requiredEnv('PROTO_POKER_RANGE_DATA_DIR')
-    const nativeModule = (await import('@proto-poker-range/bun-node-api')) as NodeApiModule
-    const store = new nativeModule.PokerHandsRange({ dataDir, maxOpenHandles: 2 })
+    const nativeModule =
+      (await import('@yangyadu/proto-poker-range-bun-node-api')) as unknown as NodeApiModule
+    const store = new nativeModule.ProtoHandRange({ dataDir, maxOpenHandles: 2 })
     return store
   })()
   return nodeApiEnginePromise

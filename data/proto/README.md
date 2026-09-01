@@ -1,6 +1,6 @@
 # Elysia 内置 V1 Proto 数据
 
-`v1-release-20260721T105500Z` 是从 `proto-poker-range` 的 V1 发布目录复制的可运行 release，包含以下 9 个维度：
+`v1-release-20260901T000000Z` 是从 `proto-poker-range` 的 V1 发布目录复制的可运行 release，包含以下 9 个维度：
 
 - `default_6max_100BB`
 - `default_6max_200BB`

@@ -167,14 +167,13 @@ cd ../elysia-verel-learn
 bun install
 ```
 
-Node-API 使用 GitHub Packages 中发布的 `@yangyadu/proto-poker-range-bun-node-api@0.1.4`。项目根目录的 `.npmrc` 会把 `@yangyadu` 指向 GitHub Packages，并从 `GITHUB_TOKEN` 读取安装凭证：
+Node-API 使用 Gitea Packages 中发布的 `@zenithstrat/proto-poker-range-bun-node-api@0.1.1`。项目根目录的 `.npmrc` 会把 `@zenithstrat` 指向 ZenithStrat 的 Gitea npm registry：
 
 ```bash
-export GITHUB_TOKEN=你的_PAT_或_GitHub_Actions_Token
-bun install
+npm install @zenithstrat/proto-poker-range-bun-node-api@0.1.1
 ```
 
-运行时默认读取项目内 `data/proto/v1-release-20260901T000000Z`，其中包含 `6/8/9max × 100/200/300BB` 的全部 9 个维度；`player_count` 与 `depth_bb` 会选择对应的 archive。如果使用其他 V1 archive，设置 `PROTO_POKER_RANGE_DATA_DIR` 覆盖默认路径；Node-API 的 `getAbstractLinesByDimensionFilters` 会复用 V1 页面读取、IDX 定位和页缓存。
+运行时默认读取项目内 `data/proto/v1-release-20260901T091450Z`，其中包含 `6/8/9max × 100/200/300BB` 的全部 9 个维度；`player_count` 与 `depth_bb` 会选择对应的 archive。如果使用其他 V1 archive，设置 `PROTO_POKER_RANGE_DATA_DIR` 覆盖默认路径；Node-API 的 `getAbstractLinesByDimensionFilters` 会复用 V1 页面读取、IDX 定位和页缓存。
 
 场景转换接口为 `POST /poker/scene-to-drill`，输入字段沿用方案文档的 snake_case 命名，例如：
 

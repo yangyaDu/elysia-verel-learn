@@ -87,9 +87,9 @@ const SCENE_AGGREGATE_OPTION_KEYS = new Set([
 
 function dimension(
   dimensionType: SceneDimensionType,
-  values: readonly SceneDimensionValue[]
+  value: SceneDimensionValue
 ): SceneDimensionFilter {
-  return { dimensionType, values }
+  return { dimensionType, value }
 }
 
 function positionOffset(playerCount: number, position: string): number | undefined {
@@ -98,17 +98,15 @@ function positionOffset(playerCount: number, position: string): number | undefin
   return offset >= 0 ? offset : undefined
 }
 
-function buildPositionValues(
+function buildPositionValue(
   playerCount: number,
-  positions: readonly string[]
-): Array<SceneDimensionValue> | undefined {
-  const offsets = positions.map((position) => positionOffset(playerCount, position))
-  if (offsets.some((offset) => offset === undefined)) {
+  position: string
+): SceneDimensionValue | undefined {
+  const offset = positionOffset(playerCount, position)
+  if (offset === undefined) {
     return undefined
   }
-  return offsets.map((seatOffsetFromButton) => ({
-    position: { seatOffsetFromButton: seatOffsetFromButton as number },
-  }))
+  return { position: { seatOffsetFromButton: offset } }
 }
 
 function isSpotTypeApplicable(
@@ -131,20 +129,20 @@ export function buildDimensionFilters(
     }
   }
 
-  const street = dimension('STREET', [{ street: STREET_VALUES[option.street] }])
+  const street = dimension('STREET', { street: STREET_VALUES[option.street] })
   const filters: SceneDimensionFilter[] = [street]
 
   // SpotType 与 Street 是一一对应的；不适用的枚举直接丢弃，不交给 Rust 做无意义筛选。
   if (option.spot_type !== undefined && isSpotTypeApplicable(option.street, option.spot_type)) {
-    filters.push(dimension('SPOT_TYPE', [{ spotType: option.spot_type }]))
+    filters.push(dimension('SPOT_TYPE', { spotType: option.spot_type }))
   }
 
   if (option.hero_position !== undefined) {
-    const values = buildPositionValues(playerCount, [option.hero_position])
-    if (!values) {
+    const value = buildPositionValue(playerCount, option.hero_position)
+    if (!value) {
       return null
     }
-    filters.push(dimension('HERO_POSITION', values))
+    filters.push(dimension('HERO_POSITION', value))
   }
 
   if (option.opponent_position !== undefined) {
@@ -152,32 +150,32 @@ export function buildDimensionFilters(
     if (offset === undefined) {
       return null
     }
-    filters.push(dimension('OPPONENT_POSITION', [{ position: { seatOffsetFromButton: offset } }]))
+    filters.push(dimension('OPPONENT_POSITION', { position: { seatOffsetFromButton: offset } }))
   }
 
-  // PositionRelation 在当前场景转换中也只对翻后有意义。
-  if (option.street !== 'preflop' && option.position_relation !== undefined) {
+  // PositionRelation 使用当前街仍 active 的行动顺序，翻前和翻后都适用。
+  if (option.position_relation !== undefined) {
     filters.push(
-      dimension('POSITION_RELATION', [
-        { positionRelation: POSITION_RELATION_VALUES[option.position_relation] },
-      ])
+      dimension('POSITION_RELATION', {
+        positionRelation: POSITION_RELATION_VALUES[option.position_relation],
+      })
     )
   }
 
   if (option.players_in_pot !== undefined) {
-    filters.push(dimension('PLAYERS_IN_POT', [{ playersInPot: option.players_in_pot }]))
+    filters.push(dimension('PLAYERS_IN_POT', { playersInPot: option.players_in_pot }))
   }
 
-  // PositionRelation、PotFamily 和 HeroInitiative 只在翻后有业务语义。
+  // PotFamily 和 HeroInitiative 只在翻后有业务语义。
   if (option.street !== 'preflop' && option.pot_family !== undefined) {
-    filters.push(dimension('POT_FAMILY', [{ potFamily: POT_FAMILY_VALUES[option.pot_family] }]))
+    filters.push(dimension('POT_FAMILY', { potFamily: POT_FAMILY_VALUES[option.pot_family] }))
   }
 
   if (option.street !== 'preflop' && option.hero_initiative !== undefined) {
     filters.push(
-      dimension('HERO_INITIATIVE', [
-        { heroInitiative: HERO_INITIATIVE_VALUES[option.hero_initiative] },
-      ])
+      dimension('HERO_INITIATIVE', {
+        heroInitiative: HERO_INITIATIVE_VALUES[option.hero_initiative],
+      })
     )
   }
 
@@ -192,7 +190,7 @@ function recommendationFromMatches(
   strategy: string,
   playerCount: number,
   depthBb: number,
-  actionLines: string[]
+  actionLines: readonly string[]
 ): SceneDrillRecommendation {
   const uniqueActionLines = [...new Set(actionLines)]
   return {

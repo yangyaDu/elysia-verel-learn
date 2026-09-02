@@ -98,10 +98,7 @@ export const sceneAggregateOptionSchema = t.Object(
     ),
     hero_initiative: t.Optional(t.Union([t.Literal('aggressor'), t.Literal('caller_or_checker')])),
     hole_cards: t.Optional(t.Array(t.String({ minLength: 2, maxLength: 4 }), { maxItems: 2 })),
-  },
-  // Elysia 会在 additionalProperties=false 时静默清理未知字段；未知字段由
-  // convertSceneAggregateOption 显式校验并返回参数错误，因此这里保留原始 body。
-  { additionalProperties: true }
+  }
 )
 
 export type SceneAggregateOption = typeof sceneAggregateOptionSchema.static

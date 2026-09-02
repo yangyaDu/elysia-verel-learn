@@ -57,7 +57,7 @@ export type SceneDimensionValue =
 
 export type SceneDimensionFilter = {
   dimensionType: SceneDimensionType
-  values: readonly SceneDimensionValue[]
+  value: SceneDimensionValue
 }
 
 export type SceneLineMatchResult = {
@@ -116,7 +116,7 @@ export function getNodeApiPokerEngine(): Promise<NodeApiPokerEngine> {
   nodeApiEnginePromise ??= (async () => {
     const dataDir = requiredEnv('PROTO_POKER_RANGE_DATA_DIR')
     const nativeModule =
-      (await import('@yangyadu/proto-poker-range-bun-node-api')) as unknown as NodeApiModule
+      (await import('@zenithstrat/proto-poker-range-bun-node-api')) as unknown as NodeApiModule
     const store = new nativeModule.ProtoHandRange({ dataDir, maxOpenHandles: 2 })
     return store
   })()
